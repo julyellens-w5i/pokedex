@@ -106,6 +106,21 @@
                 <i class="bi bi-upload" aria-hidden="true"></i> Importar
                 <input type="file" id="importFavFile" accept="application/json,.json" class="d-none" />
               </label>
+              <button type="button" class="btn btn-sm btn-outline-light rounded-pill" id="btnDensity" title="Alternar vista compacta">
+                <i class="bi bi-grid-3x3-gap" aria-hidden="true"></i> Vista
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-light rounded-pill" id="btnShortcuts" title="Atalhos de teclado">
+                <i class="bi bi-keyboard" aria-hidden="true"></i> Atalhos
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-light rounded-pill" id="btnCollections" title="Coleções guardadas">
+                <i class="bi bi-folder2-open" aria-hidden="true"></i> Coleções
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-light rounded-pill" id="btnQuiz" title="Quiz silhueta">
+                <i class="bi bi-patch-question" aria-hidden="true"></i> Quiz
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-light rounded-pill" id="btnA11y" title="Acessibilidade (contraste e texto)">
+                <i class="bi bi-universal-access" aria-hidden="true"></i> A11y
+              </button>
             </div>
           </div>
         </div>
@@ -132,6 +147,10 @@
             <ul class="list-group list-group-flush small" id="achievementsList">
               <li class="list-group-item py-2 text-muted">Carregando…</li>
             </ul>
+          </div>
+          <div class="sidebar-panel mb-3">
+            <h2 class="sidebar-head h6"><i class="bi bi-graph-up-arrow" aria-hidden="true"></i> Progresso</h2>
+            <p class="small mb-0 px-3 py-2 text-muted" id="regionProgress">Abra detalhes de Pokémon para contar o progresso nesta vista.</p>
           </div>
           <div class="sidebar-panel sidebar-panel-history p-0 overflow-hidden">
             <div class="accordion accordion-flush sidebar-history-accordion" id="historyAccordion">
@@ -207,7 +226,39 @@
                 </p>
               </div>
             </div>
-            <div id="pokemonGrid" class="row row-cols-2 row-cols-md-5 g-3"></div>
+            <div class="mb-3">
+              <button
+                class="btn btn-sm btn-outline-secondary rounded-pill"
+                type="button"
+                data-bs-toggle="collapse"
+                data-bs-target="#advancedFilters"
+                aria-expanded="false"
+                aria-controls="advancedFilters"
+              >
+                <i class="bi bi-sliders me-1" aria-hidden="true"></i>Filtros avançados (intervalo de nº)
+              </button>
+              <div class="collapse mt-2" id="advancedFilters">
+                <div class="row g-2 align-items-end">
+                  <div class="col-sm-4 col-md-3">
+                    <label class="form-label small mb-0" for="filterIdMin">Nº mín.</label>
+                    <input type="number" min="1" class="form-control form-control-sm" id="filterIdMin" placeholder="ex: 1" inputmode="numeric" />
+                  </div>
+                  <div class="col-sm-4 col-md-3">
+                    <label class="form-label small mb-0" for="filterIdMax">Nº máx.</label>
+                    <input type="number" min="1" class="form-control form-control-sm" id="filterIdMax" placeholder="ex: 151" inputmode="numeric" />
+                  </div>
+                  <div class="col-sm-4 col-md-auto d-flex gap-2">
+                    <button type="button" class="btn btn-sm btn-primary" id="btnApplyFilters">Aplicar</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="btnResetFilters">Limpar</button>
+                  </div>
+                </div>
+                <p class="small text-muted mb-0 mt-1">Aplica-se à lista atual (nacional, tipo ou região).</p>
+              </div>
+            </div>
+            <div id="catalogLiveRegion" class="visually-hidden" aria-live="polite" aria-atomic="true"></div>
+            <div id="catalogGridWrap" class="catalog-grid-wrap">
+              <div id="pokemonGrid" class="row row-cols-2 row-cols-md-5 g-3"></div>
+            </div>
             <nav id="paginationNav" class="mt-4 pt-2 border-top" style="border-color: var(--pk-border) !important" aria-label="Paginação da lista"></nav>
           </div>
         </div>
@@ -269,6 +320,98 @@
             <div id="compareResult" class="compare-result small">
               <p class="text-muted mb-0">Informe dois Pokémon e clique em Comparar.</p>
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal fade modal-pokedex" id="shortcutsModal" tabindex="-1" aria-labelledby="shortcutsModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <button type="button" class="btn-close modal-pokedex-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+          <div class="modal-header">
+            <h2 class="modal-title h5 mb-0" id="shortcutsModalLabel">Atalhos de teclado</h2>
+          </div>
+          <div class="modal-body small">
+            <ul class="mb-0">
+              <li><kbd>/</kbd> — focar a busca</li>
+              <li><kbd>Enter</kbd> na busca — abrir detalhe do termo</li>
+              <li><kbd>Esc</kbd> — fechar modais</li>
+              <li><kbd>Ctrl</kbd>+clique ou botão do meio no cartão — abrir detalhe em nova aba (URL com <code>?pokemon=</code>)</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal fade modal-pokedex" id="a11yModal" tabindex="-1" aria-labelledby="a11yModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <button type="button" class="btn-close modal-pokedex-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+          <div class="modal-header">
+            <h2 class="modal-title h5 mb-0" id="a11yModalLabel">Acessibilidade</h2>
+          </div>
+          <div class="modal-body">
+            <p class="small text-muted">Respeitamos <code>prefers-reduced-motion</code> do sistema para animações leves.</p>
+            <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+              <span class="small fw-semibold">Tamanho do texto</span>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="btnFontSmaller" title="Diminuir">A−</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="btnFontReset" title="Padrão">A</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="btnFontLarger" title="Aumentar">A+</button>
+            </div>
+            <button type="button" class="btn btn-warning w-100" id="btnToggleHc">Alternar alto contraste</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal fade modal-pokedex" id="collectionsModal" tabindex="-1" aria-labelledby="collectionsModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+          <button type="button" class="btn-close modal-pokedex-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+          <div class="modal-header">
+            <h2 class="modal-title h5 mb-0" id="collectionsModalLabel">Coleções</h2>
+          </div>
+          <div class="modal-body">
+            <div class="row g-2 align-items-end mb-3">
+              <div class="col-md-8">
+                <label class="form-label small mb-0" for="newCollectionName">Nova coleção</label>
+                <input type="text" id="newCollectionName" class="form-control" maxlength="120" placeholder="Nome da coleção" />
+              </div>
+              <div class="col-md-4">
+                <button type="button" class="btn btn-primary w-100" id="btnCreateCollection">Criar</button>
+              </div>
+            </div>
+            <div class="row g-3">
+              <div class="col-md-5">
+                <h3 class="h6">Suas coleções</h3>
+                <ul class="list-group list-group-flush small" id="collectionListEl"></ul>
+              </div>
+              <div class="col-md-7">
+                <h3 class="h6">Itens da coleção</h3>
+                <p class="small text-muted">Clique numa coleção à esquerda.</p>
+                <ul class="list-group list-group-flush small" id="collectionItemsEl"></ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal fade modal-pokedex" id="quizModal" tabindex="-1" aria-labelledby="quizModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+          <button type="button" class="btn-close modal-pokedex-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+          <div class="modal-header">
+            <h2 class="modal-title h5 mb-0" id="quizModalLabel">Quiz — quem é esse Pokémon?</h2>
+          </div>
+          <div class="modal-body text-center">
+            <div class="quiz-silhouette-wrap mx-auto mb-3">
+              <img id="quizSilhouette" src="" alt="Silhueta" class="quiz-silhouette-img" width="160" height="160" />
+            </div>
+            <p id="quizFeedback" class="small text-muted mb-2">&nbsp;</p>
+            <div id="quizChoices" class="d-grid gap-2"></div>
+            <button type="button" class="btn btn-sm btn-outline-primary mt-3" id="btnQuizNext">Próxima</button>
           </div>
         </div>
       </div>
