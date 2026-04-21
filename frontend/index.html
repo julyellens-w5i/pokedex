@@ -3,8 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#e63946" />
     <title>Pokédex — PokeAPI</title>
+    <script>
+      try {
+        if (localStorage.getItem('pokedex_theme') === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+      } catch (e) {}
+    </script>
     <link rel="icon" href="favicon.png" type="image/png" sizes="any" />
+    <link rel="manifest" href="manifest.webmanifest" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -73,8 +80,33 @@
             </div>
             <p id="searchHelp" class="form-text text-white-50 mb-0 mt-2">
               <i class="bi bi-globe2 me-1"></i>Busca em toda a Pokédex (ou só na região selecionada) ·
+              <kbd class="bg-white bg-opacity-10 px-1 rounded small">/</kbd> foca a busca ·
               <kbd class="bg-white bg-opacity-10 px-1 rounded small">Enter</kbd> abre os detalhes
             </p>
+            <div class="hero-toolbar d-flex flex-wrap gap-2 mt-3 pt-2 border-top border-white border-opacity-25">
+              <button type="button" class="btn btn-sm btn-outline-light rounded-pill" id="btnTheme" title="Alternar tema">
+                <i class="bi bi-moon-stars" aria-hidden="true"></i> Tema
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-light rounded-pill" id="btnSound" title="Som ao favoritar">
+                <i class="bi bi-volume-mute-fill" aria-hidden="true"></i> Som
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-light rounded-pill" id="btnRandom" title="Pokémon aleatório">
+                <i class="bi bi-shuffle" aria-hidden="true"></i> Surpreenda-me
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-light rounded-pill d-none" id="btnSharePokemon" title="Copiar link deste Pokémon">
+                <i class="bi bi-link-45deg" aria-hidden="true"></i> Link
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-light rounded-pill" id="btnCompare" title="Comparar dois Pokémon">
+                <i class="bi bi-intersect" aria-hidden="true"></i> Comparar
+              </button>
+              <button type="button" class="btn btn-sm btn-outline-light rounded-pill" id="btnExportFav" title="Exportar favoritos JSON">
+                <i class="bi bi-download" aria-hidden="true"></i> Favoritos
+              </button>
+              <label class="btn btn-sm btn-outline-light rounded-pill mb-0" title="Importar favoritos (JSON)">
+                <i class="bi bi-upload" aria-hidden="true"></i> Importar
+                <input type="file" id="importFavFile" accept="application/json,.json" class="d-none" />
+              </label>
+            </div>
           </div>
         </div>
       </div>
@@ -89,27 +121,89 @@
               <li class="list-group-item small text-muted">Carregando…</li>
             </ul>
           </div>
-          <div class="sidebar-panel">
-            <h2 class="sidebar-head h6"><i class="bi bi-clock-history" aria-hidden="true"></i> Buscas recentes</h2>
-            <ul class="list-group list-group-flush" id="historyList">
-              <li class="list-group-item small text-muted">Carregando…</li>
+          <div class="sidebar-panel mb-3">
+            <h2 class="sidebar-head h6"><i class="bi bi-eye" aria-hidden="true"></i> Vistos recentemente</h2>
+            <ul class="list-group list-group-flush" id="recentList">
+              <li class="list-group-item small text-muted">Abra um Pokémon para preencher.</li>
             </ul>
+          </div>
+          <div class="sidebar-panel mb-3">
+            <h2 class="sidebar-head h6"><i class="bi bi-trophy" aria-hidden="true"></i> Conquistas</h2>
+            <ul class="list-group list-group-flush small" id="achievementsList">
+              <li class="list-group-item py-2 text-muted">Carregando…</li>
+            </ul>
+          </div>
+          <div class="sidebar-panel sidebar-panel-history p-0 overflow-hidden">
+            <div class="accordion accordion-flush sidebar-history-accordion" id="historyAccordion">
+              <div class="accordion-item border-0 bg-transparent">
+                <h2 class="accordion-header m-0" id="historyHeading">
+                  <button
+                    class="accordion-button collapsed sidebar-history-toggle"
+                    type="button"
+                    data-bs-toggle="collapse"
+                    data-bs-target="#historyCollapse"
+                    aria-expanded="false"
+                    aria-controls="historyCollapse"
+                  >
+                    <i class="bi bi-clock-history me-2" aria-hidden="true"></i>
+                    <span class="history-accordion-label-collapsed">Mostrar buscas recentes</span>
+                    <span class="history-accordion-label-expanded">Ocultar buscas recentes</span>
+                  </button>
+                </h2>
+                <div
+                  id="historyCollapse"
+                  class="accordion-collapse collapse"
+                  aria-labelledby="historyHeading"
+                  data-bs-parent="#historyAccordion"
+                >
+                  <div class="accordion-body p-0 sidebar-history-collapse-inner">
+                    <ul class="list-group list-group-flush" id="historyList">
+                      <li class="list-group-item small text-muted">Carregando…</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
         <div class="col-lg-9 order-lg-1">
           <div class="content-panel">
             <div class="row g-3 align-items-end mb-3">
-              <div class="col-md-6 col-lg-5">
+              <div class="col-md-6 col-lg-4">
                 <h2 class="panel-title mb-2"><i class="bi bi-grid-3x3-gap-fill" aria-hidden="true"></i> Catálogo</h2>
                 <label for="regionFilter" class="form-label small fw-semibold text-secondary mb-1">Região</label>
                 <select id="regionFilter" class="form-select region-select" aria-label="Filtrar lista por região">
                   <option value="">Todas — Pokédex Nacional</option>
                 </select>
               </div>
-              <div class="col-md-6 col-lg-7 text-md-end">
+              <div class="col-md-6 col-lg-4">
+                <label for="typeFilter" class="form-label small fw-semibold text-secondary mb-1">Tipo</label>
+                <select id="typeFilter" class="form-select" aria-label="Filtrar por tipo (Pokédex Nacional)" disabled>
+                  <option value="">Todos os tipos</option>
+                  <option value="normal">Normal</option>
+                  <option value="fire">Fogo</option>
+                  <option value="water">Água</option>
+                  <option value="electric">Elétrico</option>
+                  <option value="grass">Planta</option>
+                  <option value="ice">Gelo</option>
+                  <option value="fighting">Lutador</option>
+                  <option value="poison">Venenoso</option>
+                  <option value="ground">Terra</option>
+                  <option value="flying">Voador</option>
+                  <option value="psychic">Psíquico</option>
+                  <option value="bug">Inseto</option>
+                  <option value="rock">Pedra</option>
+                  <option value="ghost">Fantasma</option>
+                  <option value="dragon">Dragão</option>
+                  <option value="dark">Noturno</option>
+                  <option value="steel">Aço</option>
+                  <option value="fairy">Fada</option>
+                </select>
+              </div>
+              <div class="col-md-12 col-lg-4 text-lg-end">
                 <span id="listMeta" class="list-meta-badge"><i class="bi bi-bookmarks-fill" aria-hidden="true"></i> Página 1</span>
                 <p class="hint-soft mb-0 mt-2">
-                  <i class="bi bi-info-circle me-1"></i>Kalos reúne Central, Costeira e Montanha; outras regiões seguem as Pokédexes da API.
+                  <i class="bi bi-info-circle me-1"></i>Filtro por tipo só na Pokédex Nacional. Kalos reúne várias Pokédexes regionais.
                 </p>
               </div>
             </div>
@@ -146,6 +240,35 @@
           </div>
           <div class="modal-body" id="pokemonModalBody">
             <p class="text-muted mb-0">Carregando…</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal fade modal-pokedex" id="compareModal" tabindex="-1" aria-labelledby="compareModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+          <button type="button" class="btn-close modal-pokedex-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+          <div class="modal-header">
+            <h2 class="modal-title h5 mb-0" id="compareModalLabel">Comparar Pokémon</h2>
+          </div>
+          <div class="modal-body">
+            <div class="row g-2 align-items-end mb-3">
+              <div class="col-md-5">
+                <label class="form-label small" for="compareA">Pokémon A</label>
+                <input type="text" id="compareA" class="form-control" placeholder="Nome ou número" autocomplete="off" />
+              </div>
+              <div class="col-md-5">
+                <label class="form-label small" for="compareB">Pokémon B</label>
+                <input type="text" id="compareB" class="form-control" placeholder="Nome ou número" autocomplete="off" />
+              </div>
+              <div class="col-md-2">
+                <button type="button" class="btn btn-primary w-100" id="btnRunCompare">Comparar</button>
+              </div>
+            </div>
+            <div id="compareResult" class="compare-result small">
+              <p class="text-muted mb-0">Informe dois Pokémon e clique em Comparar.</p>
+            </div>
           </div>
         </div>
       </div>
