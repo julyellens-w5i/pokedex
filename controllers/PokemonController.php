@@ -27,6 +27,8 @@ class PokemonController
         $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 20;
         $region = isset($_GET['region']) ? trim((string) $_GET['region']) : '';
         $type = isset($_GET['type']) ? trim((string) $_GET['type']) : '';
+        $idMin = isset($_GET['id_min']) ? (int) $_GET['id_min'] : 0;
+        $idMax = isset($_GET['id_max']) ? (int) $_GET['id_max'] : 0;
 
         try
         {
@@ -34,7 +36,9 @@ class PokemonController
                 $page,
                 $limit,
                 $region !== '' ? $region : null,
-                $type !== '' ? $type : null
+                $type !== '' ? $type : null,
+                $idMin > 0 ? $idMin : null,
+                $idMax > 0 ? $idMax : null
             );
             JsonView::success($data);
         }
