@@ -372,6 +372,27 @@
   border-color: var(--pk-border);
 }
 
+.pagination-pokedex .pagination-page-go .page-link {
+  cursor: default;
+  box-shadow: none;
+}
+
+.pagination-pokedex .pagination-page-input {
+  width: 4.25rem;
+  min-width: 3.25rem;
+  text-align: center;
+  font-weight: 700;
+  padding: 0.28rem 0.35rem;
+  border-radius: var(--pk-radius-sm);
+  border-color: var(--pk-border);
+  color: var(--pk-ink);
+}
+
+.pagination-pokedex .pagination-page-input:focus {
+  border-color: rgba(230, 57, 70, 0.45);
+  box-shadow: 0 0 0 2px rgba(230, 57, 70, 0.15);
+}
+
 /* ——— Modal ——— */
 .modal-pokedex .modal-content {
   position: relative;

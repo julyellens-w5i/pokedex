@@ -180,21 +180,33 @@
     const page = Math.min(Math.max(1, state.page), totalPages);
     state.page = page;
 
+    const firstDisabled = page <= 1 ? 'disabled' : '';
     const prevDisabled = page <= 1 ? 'disabled' : '';
     const nextDisabled = page >= totalPages ? 'disabled' : '';
+    const lastDisabled = page >= totalPages ? 'disabled' : '';
     const prevPage = page - 1;
     const nextPage = page + 1;
 
     const html = `
-      <ul class="pagination pagination-pokedex flex-wrap justify-content-center gap-1 mb-0" role="navigation">
-        <li class="page-item ${prevDisabled}">
-          <a class="page-link d-inline-flex align-items-center gap-1" href="#" data-nav-page="${prevPage}" aria-label="Página anterior" ${prevDisabled ? 'tabindex="-1" aria-disabled="true"' : ''}><i class="bi bi-chevron-left"></i> Anterior</a>
+      <ul class="pagination pagination-pokedex flex-wrap justify-content-center align-items-center gap-1 mb-0" role="navigation" aria-label="Paginação do catálogo">
+        <li class="page-item ${firstDisabled}">
+          <a class="page-link d-inline-flex align-items-center justify-content-center px-2" href="#" data-nav-page="1" title="Primeira página" aria-label="Primeira página" ${firstDisabled ? 'tabindex="-1" aria-disabled="true"' : ''}><i class="bi bi-chevron-bar-left" aria-hidden="true"></i></a>
         </li>
-        <li class="page-item disabled d-none d-sm-block">
-          <span class="page-link border-0 bg-transparent text-secondary fw-semibold small px-3">${page} / ${totalPages}</span>
+        <li class="page-item ${prevDisabled}">
+          <a class="page-link d-inline-flex align-items-center gap-1" href="#" data-nav-page="${prevPage}" aria-label="Página anterior" ${prevDisabled ? 'tabindex="-1" aria-disabled="true"' : ''}><i class="bi bi-chevron-left" aria-hidden="true"></i> Anterior</a>
+        </li>
+        <li class="page-item pagination-page-go">
+          <div class="page-link border-0 bg-transparent d-flex align-items-center justify-content-center gap-1 py-1 px-2">
+            <label for="paginationPageInput" class="visually-hidden">Ir para a página (Enter para confirmar)</label>
+            <input type="number" inputmode="numeric" min="1" max="${totalPages}" class="form-control form-control-sm pagination-page-input" id="paginationPageInput" value="${page}" autocomplete="off" aria-label="Número da página" />
+            <span class="text-secondary fw-semibold small text-nowrap" aria-hidden="true">/ ${totalPages}</span>
+          </div>
         </li>
         <li class="page-item ${nextDisabled}">
-          <a class="page-link d-inline-flex align-items-center gap-1" href="#" data-nav-page="${nextPage}" aria-label="Próxima página" ${nextDisabled ? 'tabindex="-1" aria-disabled="true"' : ''}>Próximo <i class="bi bi-chevron-right"></i></a>
+          <a class="page-link d-inline-flex align-items-center gap-1" href="#" data-nav-page="${nextPage}" aria-label="Próxima página" ${nextDisabled ? 'tabindex="-1" aria-disabled="true"' : ''}>Próximo <i class="bi bi-chevron-right" aria-hidden="true"></i></a>
+        </li>
+        <li class="page-item ${lastDisabled}">
+          <a class="page-link d-inline-flex align-items-center justify-content-center px-2" href="#" data-nav-page="${totalPages}" title="Última página" aria-label="Última página" ${lastDisabled ? 'tabindex="-1" aria-disabled="true"' : ''}><i class="bi bi-chevron-bar-right" aria-hidden="true"></i></a>
         </li>
       </ul>`;
     els.paginationNav.innerHTML = html;
@@ -208,6 +220,33 @@
         if (p >= 1 && p <= totalPages) loadListPage(p);
       });
     });
+
+    const pageInput = document.getElementById('paginationPageInput');
+    if (pageInput) {
+      pageInput.addEventListener('keydown', (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        let n = parseInt(String(pageInput.value).trim(), 10);
+        if (!Number.isFinite(n)) {
+          pageInput.value = String(page);
+          return;
+        }
+        n = Math.min(Math.max(1, n), totalPages);
+        pageInput.value = String(n);
+        if (n !== page) {
+          loadListPage(n);
+        }
+      });
+      pageInput.addEventListener('blur', () => {
+        let n = parseInt(String(pageInput.value).trim(), 10);
+        if (!Number.isFinite(n)) {
+          pageInput.value = String(page);
+          return;
+        }
+        n = Math.min(Math.max(1, n), totalPages);
+        pageInput.value = String(n);
+      });
+    }
   }
 
   function renderSearchToolbar() {
