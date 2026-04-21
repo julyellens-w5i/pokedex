@@ -13,6 +13,7 @@ require_once $root . '/services/PokeApiService.php';
 require_once $root . '/services/PokeLocalizedStrings.php';
 require_once $root . '/services/DatabaseService.php';
 require_once $root . '/models/RegionModel.php';
+require_once $root . '/models/PokemonStorageModel.php';
 require_once $root . '/models/PokemonModel.php';
 require_once $root . '/models/FavoriteModel.php';
 require_once $root . '/models/SearchHistoryModel.php';
