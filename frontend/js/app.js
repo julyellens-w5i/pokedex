@@ -27,6 +27,7 @@
   };
 
   let searchDebounce = null;
+  let paginationInputDebounce = null;
   /** Invalida respostas antigas quando uma nova lista ou busca é disparada. */
   let navToken = 0;
 
@@ -174,6 +175,19 @@
     } · ${escapeHtml(regLabel)} · ${escapeHtml(t)}`;
   }
 
+  function applyPaginationPageInput(pageInput, totalPages, currentPage) {
+    let n = parseInt(String(pageInput.value).trim(), 10);
+    if (!Number.isFinite(n)) {
+      pageInput.value = String(currentPage);
+      return;
+    }
+    n = Math.min(Math.max(1, n), totalPages);
+    pageInput.value = String(n);
+    if (n !== currentPage) {
+      loadListPage(n);
+    }
+  }
+
   function renderPagination() {
     if (!els.paginationNav) return;
     const totalPages = Math.max(1, state.totalPages);
@@ -197,7 +211,7 @@
         </li>
         <li class="page-item pagination-page-go">
           <div class="page-link border-0 bg-transparent d-flex align-items-center justify-content-center gap-1 py-1 px-2">
-            <label for="paginationPageInput" class="visually-hidden">Ir para a página (Enter para confirmar)</label>
+            <label for="paginationPageInput" class="visually-hidden">Ir para a página</label>
             <input type="number" inputmode="numeric" min="1" max="${totalPages}" class="form-control form-control-sm pagination-page-input" id="paginationPageInput" value="${page}" autocomplete="off" aria-label="Número da página" />
             <span class="text-secondary fw-semibold small text-nowrap" aria-hidden="true">/ ${totalPages}</span>
           </div>
@@ -223,28 +237,25 @@
 
     const pageInput = document.getElementById('paginationPageInput');
     if (pageInput) {
+      const apply = () => applyPaginationPageInput(pageInput, totalPages, page);
+      pageInput.addEventListener('change', () => {
+        clearTimeout(paginationInputDebounce);
+        paginationInputDebounce = null;
+        apply();
+      });
+      pageInput.addEventListener('input', () => {
+        clearTimeout(paginationInputDebounce);
+        paginationInputDebounce = setTimeout(() => {
+          paginationInputDebounce = null;
+          apply();
+        }, 380);
+      });
       pageInput.addEventListener('keydown', (e) => {
         if (e.key !== 'Enter') return;
         e.preventDefault();
-        let n = parseInt(String(pageInput.value).trim(), 10);
-        if (!Number.isFinite(n)) {
-          pageInput.value = String(page);
-          return;
-        }
-        n = Math.min(Math.max(1, n), totalPages);
-        pageInput.value = String(n);
-        if (n !== page) {
-          loadListPage(n);
-        }
-      });
-      pageInput.addEventListener('blur', () => {
-        let n = parseInt(String(pageInput.value).trim(), 10);
-        if (!Number.isFinite(n)) {
-          pageInput.value = String(page);
-          return;
-        }
-        n = Math.min(Math.max(1, n), totalPages);
-        pageInput.value = String(n);
+        clearTimeout(paginationInputDebounce);
+        paginationInputDebounce = null;
+        apply();
       });
     }
   }
