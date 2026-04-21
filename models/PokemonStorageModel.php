@@ -246,6 +246,72 @@ class PokemonStorageModel
         ]);
     }
 
+    /**
+     * Detalhe completo (JSON) cacheado após primeira montagem.
+     *
+     * @return array<string,mixed>|null
+     */
+    public function getDetailPayload(int $id): ?array
+    {
+        if ($id <= 0)
+        {
+            return null;
+        }
+        $stmt = $this->pdo->prepare('SELECT payload FROM pokemon_detail WHERE id = :id LIMIT 1');
+        $stmt->execute(['id' => $id]);
+        $row = $stmt->fetch();
+        if (!is_array($row))
+        {
+            return null;
+        }
+        $raw = $row['payload'] ?? null;
+        if (!is_string($raw) || $raw === '')
+        {
+            return null;
+        }
+        try
+        {
+            $data = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+        }
+        catch (Throwable)
+        {
+            return null;
+        }
+
+        return is_array($data) ? $data : null;
+    }
+
+    /**
+     * @param array<string,mixed> $payload
+     */
+    public function saveDetailPayload(int $id, array $payload): void
+    {
+        if ($id <= 0)
+        {
+            return;
+        }
+        try
+        {
+            $json = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        }
+        catch (Throwable)
+        {
+            return;
+        }
+        try
+        {
+            $sql = $this->isMysql
+                ? 'INSERT INTO pokemon_detail (id, payload) VALUES (:id, :p) ON DUPLICATE KEY UPDATE payload = VALUES(payload)'
+                : 'INSERT INTO pokemon_detail (id, payload) VALUES (:id, :p) ON CONFLICT (id) DO UPDATE SET payload = EXCLUDED.payload';
+            $stmt = $this->pdo->prepare($sql);
+            $stmt->execute(['id' => $id, 'p' => $json]);
+        }
+        catch (Throwable)
+        {
+            /* tabela ausente ou payload grande */
+        }
+    }
+
     private function setMeta(string $key, string $value): void
     {
         $key = trim($key);

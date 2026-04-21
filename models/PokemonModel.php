@@ -100,18 +100,98 @@ class PokemonModel
      *   total:int,
      *   total_pages:int,
      *   region?: string,
-     *   region_label?: string
+     *   region_label?: string,
+     *   type?: string,
+     *   type_label?: string
      * }
      */
-    public function findListPage(int $page, int $perPage, ?string $region = null): array
+    public function findListPage(int $page, int $perPage, ?string $region = null, ?string $type = null): array
     {
         $regionKey = $region !== null ? strtolower(trim($region)) : '';
+        $typeKey = $type !== null ? strtolower(trim($type)) : '';
+        if ($typeKey !== '')
+        {
+            if ($regionKey !== '')
+            {
+                return $this->findListPageForRegion($page, $perPage, $regionKey);
+            }
+
+            return $this->findListPageByType($page, $perPage, $typeKey);
+        }
         if ($regionKey === '')
         {
             return $this->findListPageNational($page, $perPage);
         }
 
         return $this->findListPageForRegion($page, $perPage, $regionKey);
+    }
+
+    /**
+     * Lista paginada por tipo (Pokédex Nacional apenas — endpoint /type/{slug}).
+     *
+     * @return array{items: list<array{id:int,name:string,image:string}>, page:int, per_page:int, total:int, total_pages:int, type:string, type_label:string}
+     */
+    private function findListPageByType(int $page, int $perPage, string $typeSlug): array
+    {
+        $page = max(1, $page);
+        $perPage = min(100, max(1, $perPage));
+        try
+        {
+            $typeData = $this->api->getTypeByName($typeSlug);
+        }
+        catch (InvalidArgumentException $e)
+        {
+            throw $e;
+        }
+        catch (Throwable $e)
+        {
+            throw new RuntimeException('Não foi possível carregar o tipo.', 0, $e);
+        }
+
+        $allItems = [];
+        foreach ($typeData['pokemon'] ?? [] as $row)
+        {
+            if (!is_array($row))
+            {
+                continue;
+            }
+            $p = $row['pokemon'] ?? null;
+            if (!is_array($p))
+            {
+                continue;
+            }
+            $url = (string) ($p['url'] ?? '');
+            $name = strtolower(trim((string) ($p['name'] ?? '')));
+            $pid = PokeApiService::extractIdFromUrl($url);
+            if ($pid <= 0 && $name === '')
+            {
+                continue;
+            }
+            if ($name === '')
+            {
+                $name = 'pokemon-' . $pid;
+            }
+            $allItems[] = $this->listItemFromPokemonNameAndId($name, $pid);
+        }
+
+        $total = count($allItems);
+        $totalPages = $perPage > 0 ? max(1, (int) ceil($total / $perPage)) : 1;
+        $offset = ($page - 1) * $perPage;
+        $items = array_slice($allItems, $offset, $perPage);
+
+        $store = $this->pokemonStore();
+        $items = $this->hydrateListItemsFromDb($store, $items);
+        $this->persistListItemsCache($store, $items);
+
+        return [
+            'items' => $items,
+            'page' => $page,
+            'per_page' => $perPage,
+            'total' => $total,
+            'total_pages' => $totalPages,
+            'type' => $typeSlug,
+            'type_label' => PokeLocalizedStrings::typeLabelPt($typeSlug),
+        ];
     }
 
     /**
@@ -566,6 +646,23 @@ class PokemonModel
             throw new RuntimeException('Não foi possível carregar o Pokémon.', 0, $e);
         }
 
+        $detailId = (int) ($pokemon['id'] ?? 0);
+        $store = $this->pokemonStore();
+        if ($store !== null && $detailId > 0)
+        {
+            try
+            {
+                $cached = $store->getDetailPayload($detailId);
+                if (is_array($cached) && isset($cached['pokemon'], $cached['evolution_stages']))
+                {
+                    return $cached;
+                }
+            }
+            catch (Throwable)
+            {
+            }
+        }
+
         $speciesUrl = $pokemon['species']['url'] ?? '';
         $species = null;
         $evolutionStages = [];
@@ -595,11 +692,23 @@ class PokemonModel
             }
         }
 
-        return [
+        $out = [
             'pokemon' => $this->mapPokemonRich($pokemon, is_array($species) ? $species : null),
             'evolution_stages' => $evolutionStages,
             'evolution_chain_url' => $evolutionChainUrl,
         ];
+        if ($store !== null && $detailId > 0)
+        {
+            try
+            {
+                $store->saveDetailPayload($detailId, $out);
+            }
+            catch (Throwable)
+            {
+            }
+        }
+
+        return $out;
     }
 
     /**
@@ -748,6 +857,18 @@ class PokemonModel
         $flavorText = $flavor['text'] ?? '';
         $flavorLang = $flavor['language'] ?? '';
 
+        $habitatSlug = '';
+        if (is_array($species) && isset($species['habitat']) && is_array($species['habitat']))
+        {
+            $habitatSlug = strtolower((string) ($species['habitat']['name'] ?? ''));
+        }
+        $habitatLabel = $habitatSlug !== '' ? ucfirst(str_replace('-', ' ', $habitatSlug)) : '';
+        $captureRate = is_array($species) && isset($species['capture_rate']) ? (int) $species['capture_rate'] : null;
+        $baseHappiness = is_array($species) && isset($species['base_happiness']) ? (int) $species['base_happiness'] : null;
+        $isBaby = is_array($species) && !empty($species['is_baby']);
+        $isLegendary = is_array($species) && !empty($species['is_legendary']);
+        $isMythical = is_array($species) && !empty($species['is_mythical']);
+
         $statsOut = [];
         foreach ($pokemon['stats'] ?? [] as $s)
         {
@@ -776,6 +897,13 @@ class PokemonModel
             'flavor_text' => $flavorText,
             'flavor_language' => $flavorLang,
             'stats' => $statsOut,
+            'habitat_slug' => $habitatSlug,
+            'habitat_label' => $habitatLabel,
+            'capture_rate' => $captureRate,
+            'base_happiness' => $baseHappiness,
+            'is_baby' => $isBaby,
+            'is_legendary' => $isLegendary,
+            'is_mythical' => $isMythical,
         ];
     }
 }
