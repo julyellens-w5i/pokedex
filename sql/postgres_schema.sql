@@ -39,3 +39,22 @@ CREATE TABLE IF NOT EXISTS favorites (
 );
 
 CREATE INDEX IF NOT EXISTS idx_favorites_data ON favorites (data_registro DESC);
+
+CREATE TABLE IF NOT EXISTS collections (
+  id BIGSERIAL PRIMARY KEY,
+  nome VARCHAR(120) NOT NULL,
+  data_registro TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_collections_data ON collections (data_registro DESC);
+
+CREATE TABLE IF NOT EXISTS collection_items (
+  id BIGSERIAL PRIMARY KEY,
+  collection_id BIGINT NOT NULL REFERENCES collections (id) ON DELETE CASCADE ON UPDATE CASCADE,
+  pokemon_id INTEGER NOT NULL,
+  nome VARCHAR(120) NOT NULL,
+  data_registro TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (collection_id, pokemon_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_collection_items_cid ON collection_items (collection_id);

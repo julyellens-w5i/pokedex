@@ -49,3 +49,24 @@ CREATE TABLE IF NOT EXISTS favorites (
   CONSTRAINT fk_favorites_pokemon FOREIGN KEY (pokemon_id) REFERENCES pokemon (id)
     ON DELETE RESTRICT ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS collections (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  nome VARCHAR(120) NOT NULL,
+  data_registro DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_collections_data (data_registro)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS collection_items (
+  id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  collection_id INT UNSIGNED NOT NULL,
+  pokemon_id INT UNSIGNED NOT NULL,
+  nome VARCHAR(120) NOT NULL,
+  data_registro DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_collection_items (collection_id, pokemon_id),
+  KEY idx_collection_items_cid (collection_id),
+  CONSTRAINT fk_collection_items_collection FOREIGN KEY (collection_id) REFERENCES collections (id)
+    ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
