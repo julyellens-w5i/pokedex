@@ -130,14 +130,19 @@
     <div class="modal fade modal-pokedex" id="pokemonModal" tabindex="-1" aria-labelledby="pokemonModalLabel" aria-hidden="true">
       <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content">
+          <button type="button" class="btn-close modal-pokedex-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
           <div class="modal-header">
             <h2 class="modal-title h5 mb-0" id="pokemonModalLabel">Detalhes</h2>
-            <div class="d-flex gap-2 align-items-center">
-              <button type="button" class="btn btn-sm btn-favorite" id="btnFavorite" title="Adicionar aos favoritos">
-                <i class="bi bi-heart" aria-hidden="true"></i><span class="d-none d-sm-inline"> Favoritar</span>
-              </button>
-              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
-            </div>
+            <button
+              type="button"
+              class="btn btn-sm btn-favorite"
+              id="btnFavorite"
+              title="Adicionar aos favoritos"
+              aria-pressed="false"
+              aria-label="Adicionar aos favoritos"
+            >
+              <i class="bi bi-heart" aria-hidden="true"></i><span class="btn-favorite-label">Favoritar</span>
+            </button>
           </div>
           <div class="modal-body" id="pokemonModalBody">
             <p class="text-muted mb-0">Carregando…</p>

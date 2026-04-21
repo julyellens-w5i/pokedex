@@ -220,6 +220,21 @@
   border-top: none;
 }
 
+.sidebar-panel .favorite-row {
+  gap: 0.5rem;
+}
+
+.sidebar-panel .favorite-row .favorite-link-wrap {
+  min-width: 0;
+}
+
+.favorite-thumb {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
 .hint-soft {
   font-size: 0.78rem;
   color: var(--pk-muted);
@@ -349,20 +364,33 @@
 
 /* ——— Modal ——— */
 .modal-pokedex .modal-content {
+  position: relative;
   border: none;
   border-radius: var(--pk-radius);
   overflow: hidden;
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.25);
 }
 
+.modal-pokedex .modal-pokedex-close {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  z-index: 10;
+}
+
 .modal-pokedex .modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.65rem;
   background: linear-gradient(125deg, #1a1a2e 0%, #1d3557 100%);
   color: #fff;
   border-bottom: none;
-  padding: 1rem 1.25rem;
+  padding: 1rem 3.25rem 1rem 1.25rem;
 }
 
 .modal-pokedex .modal-title {
+  flex-shrink: 0;
   font-weight: 800;
   letter-spacing: -0.02em;
 }
@@ -373,13 +401,40 @@
 }
 
 .modal-pokedex .modal-header .btn-favorite {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
   border-radius: 2rem;
   font-weight: 600;
-  padding: 0.35rem 0.9rem;
+  padding: 0.35rem 0.55rem;
   border: 1px solid rgba(255, 255, 255, 0.45);
   color: #fff;
   background: rgba(255, 255, 255, 0.1);
-  transition: background 0.2s ease, transform 0.15s ease;
+  transition: background 0.2s ease, transform 0.15s ease, padding 0.2s ease;
+}
+
+.modal-pokedex .modal-header .btn-favorite .btn-favorite-label {
+  display: inline-block;
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: max-width 0.22s ease, opacity 0.18s ease, margin 0.18s ease;
+  margin-left: 0;
+  vertical-align: bottom;
+}
+
+.modal-pokedex .modal-header .btn-favorite:hover,
+.modal-pokedex .modal-header .btn-favorite:focus-visible {
+  padding-left: 0.75rem;
+  padding-right: 0.9rem;
+}
+
+.modal-pokedex .modal-header .btn-favorite:hover .btn-favorite-label,
+.modal-pokedex .modal-header .btn-favorite:focus-visible .btn-favorite-label {
+  max-width: 6.5rem;
+  opacity: 1;
+  margin-left: 0.35rem;
 }
 
 .modal-pokedex .modal-header .btn-favorite:hover {
@@ -387,6 +442,16 @@
   border-color: transparent;
   color: #fff;
   transform: scale(1.02);
+}
+
+.modal-pokedex .modal-header .btn-favorite.is-favorited {
+  border-color: rgba(230, 57, 70, 0.65);
+  background: rgba(230, 57, 70, 0.35);
+  color: #fff;
+}
+
+.modal-pokedex .modal-header .btn-favorite.is-favorited:hover {
+  background: rgba(230, 57, 70, 0.9);
 }
 
 .modal-pokedex .modal-body {

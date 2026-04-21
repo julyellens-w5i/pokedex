@@ -22,6 +22,8 @@
     lastListMeta: null,
     searchActive: false,
     searchResponse: null,
+    /** @type {Set<number>} */
+    favoritePokemonIds: new Set(),
   };
 
   let searchDebounce = null;
@@ -123,6 +125,15 @@
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;');
+  }
+
+  function pokemonSpriteUrl(id) {
+    const n = parseInt(String(id), 10);
+    return (
+      'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/' +
+      (Number.isFinite(n) ? n : 0) +
+      '.png'
+    );
   }
 
   function cardHtml(item) {
@@ -330,6 +341,7 @@
       currentDetail = json.data;
       els.modalBody.innerHTML = renderDetail(currentDetail);
       wireModalInteractions();
+      await syncFavoriteIdsFromApi();
       updateFavoriteButton();
       modal.show();
       refreshHistory();
@@ -500,28 +512,52 @@
     }
   }
 
+  async function syncFavoriteIdsFromApi() {
+    try {
+      const json = await fetchJson(API_BASE + 'favorites.php');
+      if (json.db === false) {
+        state.favoritePokemonIds = new Set();
+        return;
+      }
+      const rows = json.data || [];
+      state.favoritePokemonIds = new Set(rows.map((r) => parseInt(String(r.pokemon_id), 10)));
+    } catch {
+      /* mantém o Set anterior */
+    }
+  }
+
   async function refreshFavorites() {
     if (!els.favoritesList) return;
     try {
       const json = await fetchJson(API_BASE + 'favorites.php');
       if (json.db === false) {
+        state.favoritePokemonIds = new Set();
         els.favoritesList.innerHTML =
           '<li class="list-group-item small text-muted">Configure o banco para favoritos.</li>';
+        syncFavoriteButtonIfModalOpen();
         return;
       }
       const rows = json.data || [];
+      state.favoritePokemonIds = new Set(rows.map((r) => parseInt(String(r.pokemon_id), 10)));
       if (!rows.length) {
         els.favoritesList.innerHTML = '<li class="list-group-item small text-muted">Nenhum favorito.</li>';
+        syncFavoriteButtonIfModalOpen();
         return;
       }
       els.favoritesList.innerHTML = rows
-        .map(
-          (r) => `
-        <li class="list-group-item d-flex justify-content-between align-items-center py-2">
-          <a href="#" class="text-capitalize history-chip" data-open="${escapeHtml(r.nome)}">#${r.pokemon_id} ${escapeHtml(r.nome)}</a>
-          <button type="button" class="btn btn-sm btn-outline-danger" data-del-fav="${r.id}">&times;</button>
-        </li>`
-        )
+        .map((r) => {
+          const pid = parseInt(String(r.pokemon_id), 10);
+          const thumb = pokemonSpriteUrl(pid);
+          return `
+        <li class="list-group-item favorite-row d-flex justify-content-between align-items-center">
+          <div class="d-flex align-items-center gap-2 favorite-link-wrap flex-grow-1">
+            <img class="favorite-thumb" src="${escapeHtml(thumb)}" width="40" height="40" alt="" loading="lazy"
+              onerror="this.onerror=null;this.src='https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/0.png'">
+            <a href="#" class="text-capitalize history-chip text-truncate" data-open="${escapeHtml(r.nome)}">#${r.pokemon_id} ${escapeHtml(r.nome)}</a>
+          </div>
+          <button type="button" class="btn btn-sm btn-outline-danger flex-shrink-0" data-del-fav="${r.id}" aria-label="Remover favorito">&times;</button>
+        </li>`;
+        })
         .join('');
       els.favoritesList.querySelectorAll('[data-open]').forEach((a) => {
         a.addEventListener('click', (ev) => {
@@ -534,15 +570,22 @@
           const id = btn.getAttribute('data-del-fav');
           try {
             await fetchJson(API_BASE + 'favorites.php?id=' + encodeURIComponent(id), { method: 'DELETE' });
-            refreshFavorites();
+            await refreshFavorites();
           } catch (e) {
             showToast(e.message, true);
           }
         });
       });
+      syncFavoriteButtonIfModalOpen();
     } catch (e) {
       els.favoritesList.innerHTML =
         '<li class="list-group-item small text-danger">Erro ao carregar favoritos.</li>';
+    }
+  }
+
+  function syncFavoriteButtonIfModalOpen() {
+    if (els.modalEl && els.modalEl.classList.contains('show')) {
+      updateFavoriteButton();
     }
   }
 
@@ -585,22 +628,45 @@
     const id = currentDetail.pokemon.id;
     els.btnFav.dataset.pokemonId = String(id);
     els.btnFav.dataset.nome = currentDetail.pokemon.name;
+    const isFav = state.favoritePokemonIds.has(id);
+    els.btnFav.classList.toggle('is-favorited', isFav);
+    const icon = els.btnFav.querySelector('i');
+    if (icon) {
+      icon.className = isFav ? 'bi bi-heart-fill' : 'bi bi-heart';
+    }
+    const label = isFav ? 'Remover dos favoritos' : 'Adicionar aos favoritos';
+    els.btnFav.setAttribute('title', label);
+    els.btnFav.setAttribute('aria-label', label);
+    els.btnFav.setAttribute('aria-pressed', isFav ? 'true' : 'false');
+    const textSpan = els.btnFav.querySelector('.btn-favorite-label');
+    if (textSpan) {
+      textSpan.textContent = isFav ? 'Remover' : 'Favoritar';
+    }
   }
 
   async function toggleFavorite() {
     if (!els.btnFav || !currentDetail) return;
     const pokemonId = parseInt(els.btnFav.dataset.pokemonId, 10);
     const nome = els.btnFav.dataset.nome || '';
+    const isFav = state.favoritePokemonIds.has(pokemonId);
     try {
-      await fetchJson(API_BASE + 'favorites.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pokemon_id: pokemonId, nome: nome }),
-      });
-      showToast('Adicionado aos favoritos!');
-      refreshFavorites();
+      if (isFav) {
+        await fetchJson(API_BASE + 'favorites.php?pokemon_id=' + encodeURIComponent(String(pokemonId)), {
+          method: 'DELETE',
+        });
+        showToast('Removido dos favoritos.');
+      } else {
+        await fetchJson(API_BASE + 'favorites.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pokemon_id: pokemonId, nome: nome }),
+        });
+        showToast('Adicionado aos favoritos!');
+      }
+      await refreshFavorites();
+      updateFavoriteButton();
     } catch (e) {
-      showToast(e.message || 'Não foi possível favoritar', true);
+      showToast(e.message || 'Não foi possível atualizar favoritos', true);
     }
   }
 
