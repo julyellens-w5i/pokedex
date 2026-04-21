@@ -16,6 +16,7 @@
   --pk-radius: 1rem;
   --pk-radius-sm: 0.65rem;
   --pk-font: "Plus Jakarta Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --pk-font-scale: 1;
 }
 
 /* ——— Base ——— */
@@ -24,6 +25,7 @@
   flex-direction: column;
   min-height: 100vh;
   font-family: var(--pk-font);
+  font-size: calc(1rem * var(--pk-font-scale, 1));
   color: var(--pk-ink);
   background-color: var(--pk-cream);
   background-image:
@@ -923,6 +925,11 @@
   color: var(--pk-ink-soft) !important;
 }
 
+/* Bootstrap .text-body segue --bs-body-color (tema claro) se data-bs-theme não for "dark" */
+[data-theme='dark'] .text-body {
+  color: var(--pk-ink) !important;
+}
+
 /* Hero — busca: ícone legível no tema escuro (evita branco sobre branco) */
 [data-theme='dark'] .pokedex-hero .input-group-text {
   background: rgba(255, 255, 255, 0.14);
@@ -1100,6 +1107,40 @@
   color: var(--pk-muted) !important;
 }
 
+/* Listas nos modais (Coleções, etc.) — Bootstrap mantém list-group-item claro */
+[data-theme='dark'] .modal-pokedex .list-group {
+  background: transparent;
+}
+
+[data-theme='dark'] .modal-pokedex .list-group-item {
+  background-color: #252532;
+  color: var(--pk-ink);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme='dark'] .modal-pokedex .list-group-item:hover {
+  background-color: #2e2e40;
+}
+
+[data-theme='dark'] .modal-pokedex .list-group-item .btn-link {
+  color: var(--pk-ink-soft);
+}
+
+[data-theme='dark'] .modal-pokedex .list-group-item .btn-link:hover {
+  color: var(--pk-ink);
+}
+
+[data-theme='dark'] .modal-pokedex .modal-body h3 {
+  color: var(--pk-ink);
+}
+
+[data-theme='dark'] .modal-pokedex kbd,
+[data-theme='dark'] .modal-pokedex code {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--pk-ink);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
 [data-theme='dark'] #pokemonModalBody h6 {
   border-bottom-color: rgba(230, 57, 70, 0.35);
 }
@@ -1151,4 +1192,53 @@
 
 [data-theme='dark'] .compare-stat-val.compare-stat-na {
   border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* ——— Vista compacta do catálogo ——— */
+.catalog-density-compact .pokemon-card .card-img-top {
+  height: 108px !important;
+  padding: 0.35rem !important;
+}
+
+.catalog-density-compact .pokemon-card .card-body {
+  padding: 0.35rem 0.25rem 0.45rem !important;
+}
+
+.catalog-density-compact .poke-number {
+  font-size: 0.62rem !important;
+}
+
+.catalog-density-compact .pokemon-card .fw-semibold {
+  font-size: 0.72rem !important;
+}
+
+/* ——— Quiz silhueta ——— */
+.quiz-silhouette-wrap {
+  max-width: 200px;
+}
+
+.quiz-silhouette-img {
+  filter: brightness(0);
+  object-fit: contain;
+}
+
+/* ——— Alto contraste (opcional) ——— */
+html[data-a11y-hc] .app-body {
+  filter: contrast(1.18) saturate(1.08);
+}
+
+/* ——— Reduzir movimento ——— */
+@media (prefers-reduced-motion: reduce) {
+  .pokemon-skeleton .skeleton-img,
+  .pokemon-skeleton .skeleton-line {
+    animation: none !important;
+  }
+
+  .pokemon-card {
+    transition: none !important;
+  }
+
+  .pokemon-card:hover {
+    transform: none !important;
+  }
 }
