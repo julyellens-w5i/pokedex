@@ -1,4 +1,4 @@
-# Pokédex (PHP + Vanilla JS + Bootstrap)
+# Pokédex (PHP + JavaScript + Bootstrap)
 
 Aplicação web para explorar Pokémon usando a [PokeAPI](https://pokeapi.co/), com backend PHP em **MVC**, cache simples em disco, **paginação** na lista, modal de detalhes com cadeia de evolução e suporte opcional a **favoritos** e **histórico de buscas** via MySQL ou PostgreSQL.
 
