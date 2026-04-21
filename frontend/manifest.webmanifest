@@ -1,0 +1,11 @@
+{
+  "name": "Pokédex — PokeAPI",
+  "short_name": "Pokédex",
+  "description": "Catálogo de Pokémon com dados da PokeAPI.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#fff8f0",
+  "theme_color": "#e63946",
+  "lang": "pt-BR"
+}
