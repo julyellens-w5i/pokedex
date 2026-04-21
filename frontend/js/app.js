@@ -35,6 +35,7 @@
     grid: document.getElementById('pokemonGrid'),
     search: document.getElementById('searchInput'),
     regionFilter: document.getElementById('regionFilter'),
+    typeFilter: document.getElementById('typeFilter'),
     paginationNav: document.getElementById('paginationNav'),
     listMeta: document.getElementById('listMeta'),
     loader: document.getElementById('globalLoader'),
@@ -43,13 +44,439 @@
     toastEl: document.getElementById('appToast'),
     favoritesList: document.getElementById('favoritesList'),
     historyList: document.getElementById('historyList'),
+    recentList: document.getElementById('recentList'),
+    achievementsList: document.getElementById('achievementsList'),
     btnFav: document.getElementById('btnFavorite'),
+    btnTheme: document.getElementById('btnTheme'),
+    btnSound: document.getElementById('btnSound'),
+    btnRandom: document.getElementById('btnRandom'),
+    btnSharePokemon: document.getElementById('btnSharePokemon'),
+    btnCompare: document.getElementById('btnCompare'),
+    btnExportFav: document.getElementById('btnExportFav'),
+    importFavFile: document.getElementById('importFavFile'),
+    compareModal: document.getElementById('compareModal'),
+    compareA: document.getElementById('compareA'),
+    compareB: document.getElementById('compareB'),
+    btnRunCompare: document.getElementById('btnRunCompare'),
+    compareResult: document.getElementById('compareResult'),
   };
 
   const modal = els.modalEl ? new bootstrap.Modal(els.modalEl) : null;
+  const compareModalBootstrap = els.compareModal ? new bootstrap.Modal(els.compareModal) : null;
   const toast = els.toastEl ? new bootstrap.Toast(els.toastEl, { delay: 3200 }) : null;
 
   let currentDetail = null;
+
+  const LS_THEME = 'pokedex_theme';
+  const LS_SOUND = 'pokedex_sound';
+  const LS_RECENT = 'pokedex_recent_v1';
+  const LS_STATS = 'pokedex_stats_v1';
+
+  function skeletonGridHtml() {
+    const n = Math.min(20, Math.max(1, state.perPage || 20));
+    let html = '';
+    for (let i = 0; i < n; i++) {
+      html += `<div class="col"><div class="card pokemon-skeleton h-100 shadow-sm border-0"><div class="skeleton-img"></div><div class="card-body py-2 px-2"><div class="skeleton-line skeleton-num"></div><div class="skeleton-line skeleton-name"></div></div></div></div>`;
+    }
+    return html;
+  }
+
+  function syncTypeFilterEnabled() {
+    const tf = els.typeFilter;
+    if (!tf) return;
+    const reg = els.regionFilter && els.regionFilter.value;
+    tf.disabled = !!reg;
+    if (reg) tf.value = '';
+  }
+
+  function applyTheme(dark) {
+    const root = document.documentElement;
+    if (dark) {
+      root.setAttribute('data-theme', 'dark');
+      try {
+        localStorage.setItem(LS_THEME, 'dark');
+      } catch (e) {}
+    } else {
+      root.removeAttribute('data-theme');
+      try {
+        localStorage.setItem(LS_THEME, 'light');
+      } catch (e) {}
+    }
+    if (els.btnTheme) {
+      const i = els.btnTheme.querySelector('i');
+      if (i) i.className = dark ? 'bi bi-sun-fill' : 'bi bi-moon-stars';
+    }
+  }
+
+  function initThemeToggle() {
+    if (!els.btnTheme) return;
+    const syncIcon = () => {
+      const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+      const i = els.btnTheme.querySelector('i');
+      if (i) i.className = dark ? 'bi bi-sun-fill' : 'bi bi-moon-stars';
+    };
+    syncIcon();
+    els.btnTheme.addEventListener('click', () => {
+      applyTheme(document.documentElement.getAttribute('data-theme') !== 'dark');
+    });
+  }
+
+  function initSoundToggle() {
+    if (!els.btnSound) return;
+    let on = false;
+    try {
+      on = localStorage.getItem(LS_SOUND) === '1';
+    } catch (e) {}
+    const syncIcon = () => {
+      const i = els.btnSound.querySelector('i');
+      if (i) i.className = on ? 'bi bi-volume-up-fill' : 'bi bi-volume-mute-fill';
+    };
+    syncIcon();
+    els.btnSound.addEventListener('click', () => {
+      on = !on;
+      try {
+        localStorage.setItem(LS_SOUND, on ? '1' : '0');
+      } catch (e) {}
+      syncIcon();
+      showToast(on ? 'Som ativado' : 'Som desativado');
+    });
+  }
+
+  function playFavoriteBlip() {
+    try {
+      if (localStorage.getItem(LS_SOUND) !== '1') return;
+    } catch (e) {
+      return;
+    }
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'sine';
+      o.frequency.value = 880;
+      g.gain.value = 0.04;
+      o.connect(g);
+      g.connect(ctx.destination);
+      o.start();
+      setTimeout(() => {
+        o.stop();
+        ctx.close();
+      }, 90);
+    } catch (e) {}
+  }
+
+  function readStats() {
+    try {
+      const raw = localStorage.getItem(LS_STATS);
+      const o = raw ? JSON.parse(raw) : {};
+      return {
+        views: parseInt(String(o.views || '0'), 10) || 0,
+        favAdds: parseInt(String(o.favAdds || '0'), 10) || 0,
+      };
+    } catch (e) {
+      return { views: 0, favAdds: 0 };
+    }
+  }
+
+  function writeStats(s) {
+    try {
+      localStorage.setItem(LS_STATS, JSON.stringify(s));
+    } catch (e) {}
+  }
+
+  function bumpAchievement(kind) {
+    const s = readStats();
+    if (kind === 'views') s.views += 1;
+    if (kind === 'favadd') s.favAdds += 1;
+    writeStats(s);
+    renderAchievements();
+  }
+
+  function renderAchievements() {
+    if (!els.achievementsList) return;
+    const s = readStats();
+    const milestones = [
+      { k: 'views', n: 1, label: 'Ver 1 detalhe' },
+      { k: 'views', n: 5, label: 'Ver 5 detalhes' },
+      { k: 'views', n: 25, label: 'Ver 25 detalhes' },
+      { k: 'favadd', n: 1, label: '1 favorito adicionado' },
+      { k: 'favadd', n: 5, label: '5 favoritos' },
+    ];
+    const lines = milestones.map((m) => {
+      const v = m.k === 'views' ? s.views : s.favAdds;
+      const ok = v >= m.n;
+      return `<li class="list-group-item py-2 d-flex align-items-center gap-2"><span class="${ok ? 'text-success' : 'text-muted'}">${ok ? '✓' : '○'}</span><span>${escapeHtml(m.label)}</span></li>`;
+    });
+    els.achievementsList.innerHTML = lines.join('');
+  }
+
+  function readRecent() {
+    try {
+      const raw = localStorage.getItem(LS_RECENT);
+      const arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function writeRecent(arr) {
+    try {
+      localStorage.setItem(LS_RECENT, JSON.stringify(arr.slice(0, 12)));
+    } catch (e) {}
+  }
+
+  function recordRecentView(pokemon) {
+    if (!pokemon || !pokemon.id) return;
+    const id = parseInt(String(pokemon.id), 10);
+    const name = String(pokemon.name_display || pokemon.name || '').trim() || String(pokemon.name);
+    let list = readRecent().filter((x) => x && x.id !== id);
+    list.unshift({ id, name });
+    writeRecent(list);
+    renderRecentList();
+  }
+
+  function renderRecentList() {
+    if (!els.recentList) return;
+    const list = readRecent();
+    if (!list.length) {
+      els.recentList.innerHTML = '<li class="list-group-item small text-muted">Abra um Pokémon para preencher.</li>';
+      return;
+    }
+    els.recentList.innerHTML = list
+      .map(
+        (r) => `
+      <li class="list-group-item py-2">
+        <a href="#" class="small history-chip text-capitalize" data-open-recent="${escapeHtml(String(r.name))}">#${r.id} ${escapeHtml(String(r.name))}</a>
+      </li>`
+      )
+      .join('');
+    els.recentList.querySelectorAll('[data-open-recent]').forEach((a) => {
+      a.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        openPokemon(a.getAttribute('data-open-recent'));
+      });
+    });
+  }
+
+  function syncPokemonUrlQuery(identifier) {
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.set('pokemon', String(identifier).toLowerCase().trim());
+      history.replaceState({}, '', u.pathname + (u.search ? u.search : ''));
+    } catch (e) {}
+  }
+
+  function clearPokemonUrlQuery() {
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.delete('pokemon');
+      const q = u.searchParams.toString();
+      history.replaceState({}, '', u.pathname + (q ? '?' + q : ''));
+    } catch (e) {}
+  }
+
+  async function openRandomPokemon() {
+    let max = state.total;
+    if (!max) {
+      try {
+        const j = await fetchJson(API_BASE + 'list.php?page=1&limit=1');
+        max = parseInt(String((j.data || {}).total || '0'), 10) || 1025;
+      } catch (e) {
+        max = 1025;
+      }
+    }
+    const id = 1 + Math.floor(Math.random() * Math.max(1, max));
+    openPokemon(String(id));
+  }
+
+  async function exportFavoritesJson() {
+    try {
+      const json = await fetchJson(API_BASE + 'favorites.php');
+      if (json.db === false) {
+        showToast('Configure o banco para usar favoritos.', true);
+        return;
+      }
+      const blob = new Blob([JSON.stringify(json.data || [], null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'pokedex-favoritos.json';
+      a.click();
+      URL.revokeObjectURL(a.href);
+      showToast('Exportação concluída.');
+    } catch (e) {
+      showToast(e.message || 'Falha ao exportar', true);
+    }
+  }
+
+  async function importFavoritesFromFile(file) {
+    const text = await file.text();
+    const rows = JSON.parse(text);
+    if (!Array.isArray(rows)) throw new Error('JSON inválido');
+    let ok = 0;
+    for (const r of rows) {
+      const id = r.pokemon_id != null ? parseInt(String(r.pokemon_id), 10) : parseInt(String(r.id || '0'), 10);
+      const nome = (r.nome != null ? String(r.nome) : r.name != null ? String(r.name) : '').trim();
+      if (!id || !nome) continue;
+      try {
+        await fetchJson(API_BASE + 'favorites.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pokemon_id: id, nome }),
+        });
+        ok++;
+      } catch (e) {}
+    }
+    await refreshFavorites();
+    showToast(ok ? `Importados ${ok} favorito(s).` : 'Nenhum favorito novo importado.');
+  }
+
+  function statValueNum(v) {
+    if (typeof v === 'number' && Number.isFinite(v)) return v;
+    const n = parseInt(String(v), 10);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  /** Classes por célula: [classeA, classeB] para destacar vencedor da stat. */
+  function compareStatHighlightClasses(va, vb) {
+    const na = statValueNum(va);
+    const nb = statValueNum(vb);
+    if (na === null || nb === null) return ['compare-stat-na', 'compare-stat-na'];
+    if (na > nb) return ['compare-stat-winner', 'compare-stat-loser'];
+    if (nb > na) return ['compare-stat-loser', 'compare-stat-winner'];
+    return ['compare-stat-tie', 'compare-stat-tie'];
+  }
+
+  function renderCompareBoard(pA, pB) {
+    const labels = ['PS', 'Ataque', 'Defesa', 'At. Esp.', 'Def. Esp.', 'Velocidade'];
+    const ids = ['hp', 'attack', 'defense', 'special-attack', 'special-defense', 'speed'];
+    const byId = (stats, id) => {
+      const row = (stats || []).find((s) => s.id === id);
+      return row ? Number(row.base) : '—';
+    };
+    const na = escapeHtml(pA.name_display || pA.name);
+    const nb = escapeHtml(pB.name_display || pB.name);
+    const imgA = escapeHtml(pA.image || '');
+    const imgB = escapeHtml(pB.image || '');
+    let winsA = 0;
+    let winsB = 0;
+    let ties = 0;
+    const cells = [];
+    for (let i = 0; i < ids.length; i++) {
+      const va = byId(pA.stats, ids[i]);
+      const vb = byId(pB.stats, ids[i]);
+      const [cA, cB] = compareStatHighlightClasses(va, vb);
+      const nA = statValueNum(va);
+      const nB = statValueNum(vb);
+      if (nA !== null && nB !== null) {
+        if (nA > nB) winsA += 1;
+        else if (nB > nA) winsB += 1;
+        else ties += 1;
+      }
+      const ariaA =
+        nA !== null && nB !== null
+          ? nA > nB
+            ? 'Maior que o oponente nesta stat'
+            : nA < nB
+              ? 'Menor que o oponente nesta stat'
+              : 'Empate com o oponente nesta stat'
+          : 'Valor da stat';
+      const ariaB =
+        nA !== null && nB !== null
+          ? nB > nA
+            ? 'Maior que o oponente nesta stat'
+            : nB < nA
+              ? 'Menor que o oponente nesta stat'
+              : 'Empate com o oponente nesta stat'
+          : 'Valor da stat';
+      cells.push(`
+        <div class="compare-stat-name">${escapeHtml(labels[i])}</div>
+        <div class="compare-stat-val ${cA}" aria-label="${ariaA}">${va}</div>
+        <div class="compare-stat-val ${cB}" aria-label="${ariaB}">${vb}</div>`);
+    }
+    const shortA = escapeHtml((pA.name_display || pA.name || 'A').split(' ')[0]);
+    const shortB = escapeHtml((pB.name_display || pB.name || 'B').split(' ')[0]);
+    const summaryParts = [];
+    if (winsA || winsB || ties) {
+      summaryParts.push(
+        `<strong class="compare-summary-name">${shortA}</strong> <span class="text-muted">lidera em</span> <strong class="compare-summary-name">${winsA}</strong> <span class="text-muted">stat(s)</span>`
+      );
+      summaryParts.push(
+        `<strong class="compare-summary-name">${shortB}</strong> <span class="text-muted">lidera em</span> <strong class="compare-summary-name">${winsB}</strong> <span class="text-muted">stat(s)</span>`
+      );
+      if (ties) summaryParts.push(`<span class="text-muted">empates:</span> <strong class="compare-summary-name">${ties}</strong>`);
+    }
+    const summary =
+      summaryParts.length > 0
+        ? `<p class="compare-summary mb-0 mt-3"><span class="compare-summary-label">Resumo</span> · ${summaryParts.join(' · ')}. <span class="compare-summary-hint">Verde = maior na linha · Vermelho = menor.</span></p>`
+        : '';
+
+    return `
+      <div class="compare-board" role="table" aria-label="Comparação de stats base">
+        <div class="compare-board-corner" aria-hidden="true"></div>
+        <div class="compare-board-poke">
+          <img src="${imgA}" class="compare-head-img mb-2" alt="" onerror="this.onerror=null;this.src='${pokemonSpriteUrl(pA.id)}'">
+          <div class="compare-poke-name">${na} <span class="text-muted fw-normal">#${String(pA.id).padStart(4, '0')}</span></div>
+          <div class="compare-poke-types mt-1">${renderTypeBadges(pA.types)}</div>
+        </div>
+        <div class="compare-board-poke">
+          <img src="${imgB}" class="compare-head-img mb-2" alt="" onerror="this.onerror=null;this.src='${pokemonSpriteUrl(pB.id)}'">
+          <div class="compare-poke-name">${nb} <span class="text-muted fw-normal">#${String(pB.id).padStart(4, '0')}</span></div>
+          <div class="compare-poke-types mt-1">${renderTypeBadges(pB.types)}</div>
+        </div>
+        ${cells.join('')}
+      </div>
+      ${summary}`;
+  }
+
+  async function runCompare() {
+    const a = (els.compareA && els.compareA.value.trim()) || '';
+    const b = (els.compareB && els.compareB.value.trim()) || '';
+    if (!a || !b) {
+      showToast('Informe os dois Pokémon.', true);
+      return;
+    }
+    if (!els.compareResult) return;
+    els.compareResult.innerHTML = '<p class="text-muted mb-0">Carregando…</p>';
+    try {
+      const qa = /^\d+$/.test(a) ? 'id=' + encodeURIComponent(a) : 'name=' + encodeURIComponent(a.toLowerCase());
+      const qb = /^\d+$/.test(b) ? 'id=' + encodeURIComponent(b) : 'name=' + encodeURIComponent(b.toLowerCase());
+      const [ja, jb] = await Promise.all([
+        fetchJson(API_BASE + 'pokemon.php?' + qa),
+        fetchJson(API_BASE + 'pokemon.php?' + qb),
+      ]);
+      const pa = ja.data && ja.data.pokemon ? ja.data.pokemon : null;
+      const pb = jb.data && jb.data.pokemon ? jb.data.pokemon : null;
+      if (!pa || !pb) throw new Error('Resposta incompleta');
+      els.compareResult.innerHTML = renderCompareBoard(pa, pb);
+    } catch (e) {
+      els.compareResult.innerHTML = `<p class="text-danger mb-0">${escapeHtml(e.message || 'Erro')}</p>`;
+    }
+  }
+
+  function registerServiceWorkerSafe() {
+    if (!('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+
+  function bindGlobalShortcuts() {
+    document.addEventListener('keydown', (e) => {
+      const tag = (e.target && e.target.tagName) || '';
+      const inField = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+      if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (inField && e.target !== els.search) return;
+        if (e.target === els.search) return;
+        e.preventDefault();
+        els.search && els.search.focus();
+      }
+      if (e.key === 'Escape') {
+        if (els.modalEl && els.modalEl.classList.contains('show') && modal) modal.hide();
+        if (els.compareModal && els.compareModal.classList.contains('show') && compareModalBootstrap) {
+          compareModalBootstrap.hide();
+        }
+      }
+    });
+  }
 
   function showLoader(show) {
     if (!els.loader) return;
@@ -170,9 +597,10 @@
     state.lastListMeta = d;
     const regLabel = d.region_label ? String(d.region_label) : 'Pokédex Nacional';
     const t = state.total > 0 ? `${state.total} Pokémon` : 'Lista';
+    const typeExtra = d.type_label ? ` · Tipo: ${escapeHtml(String(d.type_label))}` : '';
     els.listMeta.innerHTML = `<i class="bi bi-bookmarks-fill" aria-hidden="true"></i> Pág. ${state.page}/${
       state.totalPages
-    } · ${escapeHtml(regLabel)} · ${escapeHtml(t)}`;
+    } · ${escapeHtml(regLabel)} · ${escapeHtml(t)}${typeExtra}`;
   }
 
   function applyPaginationPageInput(pageInput, totalPages, currentPage) {
@@ -338,6 +766,7 @@
     state.searchResponse = null;
     state.loading = true;
     showLoader(true);
+    if (els.grid) els.grid.innerHTML = skeletonGridHtml();
     try {
       let url =
         API_BASE +
@@ -348,6 +777,10 @@
       const region = els.regionFilter && els.regionFilter.value ? els.regionFilter.value.trim() : '';
       if (region) {
         url += '&region=' + encodeURIComponent(region);
+      }
+      const typeSlug = els.typeFilter && !els.typeFilter.disabled && els.typeFilter.value ? els.typeFilter.value.trim() : '';
+      if (typeSlug) {
+        url += '&type=' + encodeURIComponent(typeSlug);
       }
       const json = await fetchJson(url);
       if (token !== navToken) return;
@@ -393,6 +826,12 @@
       wireModalInteractions();
       await syncFavoriteIdsFromApi();
       updateFavoriteButton();
+      if (currentDetail && currentDetail.pokemon) {
+        recordRecentView(currentDetail.pokemon);
+        syncPokemonUrlQuery(currentDetail.pokemon.name || String(currentDetail.pokemon.id));
+        bumpAchievement('views');
+      }
+      if (els.btnSharePokemon) els.btnSharePokemon.classList.remove('d-none');
       modal.show();
       refreshHistory();
     } catch (e) {
@@ -475,6 +914,18 @@
         ? `<h6 class="mt-3">Status base</h6><div class="table-responsive"><table class="table table-sm table-borderless mb-0"><tbody>${statsRows}</tbody></table></div>`
         : '';
 
+    let triviaHtml = '';
+    const bits = [];
+    if (p.habitat_label) bits.push(`Habitat típico: <strong>${escapeHtml(String(p.habitat_label))}</strong>`);
+    if (p.capture_rate != null && p.capture_rate !== '') bits.push(`Taxa de captura: <strong>${escapeHtml(String(p.capture_rate))}</strong> (255 = mais difícil)`);
+    if (p.base_happiness != null && p.base_happiness !== '') bits.push(`Felicidade base: <strong>${escapeHtml(String(p.base_happiness))}</strong>`);
+    if (p.is_baby) bits.push('<span class="badge bg-info text-dark">Bebé</span>');
+    if (p.is_legendary) bits.push('<span class="badge bg-warning text-dark">Lendário</span>');
+    if (p.is_mythical) bits.push('<span class="badge bg-danger">Mítico</span>');
+    if (bits.length) {
+      triviaHtml = `<h6 class="mt-3">Curiosidades</h6><p class="small trivia-box mb-0">${bits.join(' · ')}</p>`;
+    }
+
     return `
       <div class="row g-3">
         <div class="col-md-5 text-center">
@@ -486,6 +937,7 @@
           <h4 class="mb-1">${escapeHtml(titleName)} <span class="text-muted fs-6">#${String(p.id).padStart(4, '0')}</span></h4>
           ${genusHtml}
           <p class="mb-2"><strong>Altura:</strong> ${h} m &nbsp;|&nbsp; <strong>Peso:</strong> ${w} kg</p>
+          ${triviaHtml}
           <h6 class="mt-3">Habilidades</h6>
           <ul class="mb-3">${abilities || '<li class="text-muted">—</li>'}</ul>
           ${statsHtml}
@@ -712,6 +1164,8 @@
           body: JSON.stringify({ pokemon_id: pokemonId, nome: nome }),
         });
         showToast('Adicionado aos favoritos!');
+        playFavoriteBlip();
+        bumpAchievement('favadd');
       }
       await refreshFavorites();
       updateFavoriteButton();
@@ -721,6 +1175,20 @@
   }
 
   async function init() {
+    initThemeToggle();
+    initSoundToggle();
+    renderRecentList();
+    renderAchievements();
+    registerServiceWorkerSafe();
+    bindGlobalShortcuts();
+
+    if (els.modalEl) {
+      els.modalEl.addEventListener('hidden.bs.modal', () => {
+        clearPokemonUrlQuery();
+        if (els.btnSharePokemon) els.btnSharePokemon.classList.add('d-none');
+      });
+    }
+
     els.grid.addEventListener('click', onGridClick);
     els.grid.addEventListener('keydown', onGridKeydown);
     if (els.search) {
@@ -729,6 +1197,7 @@
     }
     if (els.regionFilter) {
       els.regionFilter.addEventListener('change', () => {
+        syncTypeFilterEnabled();
         const raw = (els.search && els.search.value ? els.search.value : '').trim();
         if (raw.length >= 2 || /^\d+$/.test(raw)) {
           runGlobalSearch(raw);
@@ -737,13 +1206,62 @@
         }
       });
     }
+    if (els.typeFilter) {
+      els.typeFilter.addEventListener('change', () => {
+        loadListPage(1);
+      });
+    }
     if (els.btnFav) {
       els.btnFav.addEventListener('click', toggleFavorite);
     }
+    if (els.btnRandom) {
+      els.btnRandom.addEventListener('click', () => openRandomPokemon());
+    }
+    if (els.btnSharePokemon) {
+      els.btnSharePokemon.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(window.location.href);
+          showToast('Link copiado para a área de transferência.');
+        } catch (e) {
+          showToast('Não foi possível copiar o link.', true);
+        }
+      });
+    }
+    if (els.btnCompare) {
+      els.btnCompare.addEventListener('click', () => {
+        if (compareModalBootstrap) compareModalBootstrap.show();
+      });
+    }
+    if (els.btnRunCompare) {
+      els.btnRunCompare.addEventListener('click', () => runCompare());
+    }
+    if (els.btnExportFav) {
+      els.btnExportFav.addEventListener('click', () => exportFavoritesJson());
+    }
+    if (els.importFavFile) {
+      els.importFavFile.addEventListener('change', async (ev) => {
+        const f = ev.target.files && ev.target.files[0];
+        ev.target.value = '';
+        if (!f) return;
+        try {
+          await importFavoritesFromFile(f);
+        } catch (e) {
+          showToast(e.message || 'Importação inválida', true);
+        }
+      });
+    }
+
     await populateRegionFilter();
-    loadListPage(1);
+    syncTypeFilterEnabled();
+    await loadListPage(1);
     refreshFavorites();
     refreshHistory();
+
+    try {
+      const u = new URL(window.location.href);
+      const qp = (u.searchParams.get('pokemon') || '').trim();
+      if (qp) openPokemon(qp);
+    } catch (e) {}
   }
 
   document.addEventListener('DOMContentLoaded', init);
