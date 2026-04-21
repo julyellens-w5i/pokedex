@@ -253,11 +253,23 @@ class PokemonStorageModel
      */
     public function getDetailPayload(int $id): ?array
     {
+        $row = $this->getDetailPayloadRow($id);
+
+        return $row !== null ? $row['payload'] : null;
+    }
+
+    /**
+     * Detalhe em cache com data de atualização (ISO 8601 quando possível).
+     *
+     * @return array{payload: array<string,mixed>, updated_at: string}|null
+     */
+    public function getDetailPayloadRow(int $id): ?array
+    {
         if ($id <= 0)
         {
             return null;
         }
-        $stmt = $this->pdo->prepare('SELECT payload FROM pokemon_detail WHERE id = :id LIMIT 1');
+        $stmt = $this->pdo->prepare('SELECT payload, updated_at FROM pokemon_detail WHERE id = :id LIMIT 1');
         $stmt->execute(['id' => $id]);
         $row = $stmt->fetch();
         if (!is_array($row))
@@ -277,8 +289,25 @@ class PokemonStorageModel
         {
             return null;
         }
+        if (!is_array($data))
+        {
+            return null;
+        }
+        $ts = $row['updated_at'] ?? '';
+        $updatedAt = '';
+        if ($ts instanceof \DateTimeInterface)
+        {
+            $updatedAt = $ts->format(\DateTimeInterface::ATOM);
+        }
+        elseif (is_string($ts) && $ts !== '')
+        {
+            $updatedAt = $ts;
+        }
 
-        return is_array($data) ? $data : null;
+        return [
+            'payload' => $data,
+            'updated_at' => $updatedAt,
+        ];
     }
 
     /**

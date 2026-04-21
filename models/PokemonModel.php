@@ -90,6 +90,30 @@ class PokemonModel
     }
 
     /**
+     * Intervalo de IDs (inclusivo) dentro de 1..$total. Null = sem limite nesse extremo.
+     *
+     * @return array{0:int,1:int}
+     */
+    private function boundIdRange(?int $idMin, ?int $idMax, int $total): array
+    {
+        $T = max(0, $total);
+        if ($T === 0)
+        {
+            return [1, 0];
+        }
+        $lo = $idMin !== null && $idMin > 0 ? min($idMin, $T) : 1;
+        $hi = $idMax !== null && $idMax > 0 ? min($idMax, $T) : $T;
+        if ($lo > $hi)
+        {
+            $tmp = $lo;
+            $lo = $hi;
+            $hi = $tmp;
+        }
+
+        return [$lo, $hi];
+    }
+
+    /**
      * Lista uma página (1-based). Sem região = Pokédex Nacional (todos).
      * Com `region` = espécies das Pokédexes da região (API), mescladas e deduplicadas.
      *
@@ -105,7 +129,7 @@ class PokemonModel
      *   type_label?: string
      * }
      */
-    public function findListPage(int $page, int $perPage, ?string $region = null, ?string $type = null): array
+    public function findListPage(int $page, int $perPage, ?string $region = null, ?string $type = null, ?int $idMin = null, ?int $idMax = null): array
     {
         $regionKey = $region !== null ? strtolower(trim($region)) : '';
         $typeKey = $type !== null ? strtolower(trim($type)) : '';
@@ -113,17 +137,17 @@ class PokemonModel
         {
             if ($regionKey !== '')
             {
-                return $this->findListPageForRegion($page, $perPage, $regionKey);
+                return $this->findListPageForRegion($page, $perPage, $regionKey, $idMin, $idMax);
             }
 
-            return $this->findListPageByType($page, $perPage, $typeKey);
+            return $this->findListPageByType($page, $perPage, $typeKey, $idMin, $idMax);
         }
         if ($regionKey === '')
         {
-            return $this->findListPageNational($page, $perPage);
+            return $this->findListPageNational($page, $perPage, $idMin, $idMax);
         }
 
-        return $this->findListPageForRegion($page, $perPage, $regionKey);
+        return $this->findListPageForRegion($page, $perPage, $regionKey, $idMin, $idMax);
     }
 
     /**
@@ -131,7 +155,7 @@ class PokemonModel
      *
      * @return array{items: list<array{id:int,name:string,image:string}>, page:int, per_page:int, total:int, total_pages:int, type:string, type_label:string}
      */
-    private function findListPageByType(int $page, int $perPage, string $typeSlug): array
+    private function findListPageByType(int $page, int $perPage, string $typeSlug, ?int $idMin = null, ?int $idMax = null): array
     {
         $page = max(1, $page);
         $perPage = min(100, max(1, $perPage));
@@ -174,6 +198,37 @@ class PokemonModel
             $allItems[] = $this->listItemFromPokemonNameAndId($name, $pid);
         }
 
+        if ($idMin !== null || $idMax !== null)
+        {
+            $natCap = 1025;
+            $st = $this->pokemonStore();
+            if ($st !== null)
+            {
+                try
+                {
+                    $tc = $st->getNationalTotalCount();
+                    if ($tc !== null && $tc > 0)
+                    {
+                        $natCap = $tc;
+                    }
+                }
+                catch (Throwable)
+                {
+                }
+            }
+            $bound = $this->boundIdRange($idMin, $idMax, $natCap);
+            $lo = $bound[0];
+            $hi = $bound[1];
+            $allItems = array_values(array_filter(
+                $allItems,
+                static function (array $it) use ($lo, $hi): bool {
+                    $id = (int) ($it['id'] ?? 0);
+
+                    return $id >= $lo && $id <= $hi;
+                }
+            ));
+        }
+
         $total = count($allItems);
         $totalPages = $perPage > 0 ? max(1, (int) ceil($total / $perPage)) : 1;
         $offset = ($page - 1) * $perPage;
@@ -195,56 +250,106 @@ class PokemonModel
     }
 
     /**
-     * @return array{items: list<array{id:int,name:string,image:string}>, page:int, per_page:int, total:int, total_pages:int}
+     * @return array{items: list<array{id:int,name:string,image:string}>, page:int, per_page:int, total:int, total_pages:int, national_total?:int, id_range?: array{min:int,max:int}}
      */
-    private function findListPageNational(int $page, int $perPage): array
+    private function findListPageNational(int $page, int $perPage, ?int $idMin = null, ?int $idMax = null): array
     {
         $page = max(1, $page);
         $perPage = min(100, max(1, $perPage));
-        $offset = ($page - 1) * $perPage;
-        $startId = $offset + 1;
-        $endId = $offset + $perPage;
-
         $store = $this->pokemonStore();
-        if ($store !== null)
+        $totalFull = null;
+        try
         {
-            try
+            if ($store !== null)
             {
-                $total = $store->getNationalTotalCount();
-                if ($total === null)
+                $totalFull = $store->getNationalTotalCount();
+                if ($totalFull === null)
                 {
                     $peek = $this->api->getPokemonList(0, 1);
                     $cnt = (int) ($peek['count'] ?? 0);
                     if ($cnt > 0)
                     {
                         $store->setNationalTotalCount($cnt);
-                        $total = $cnt;
+                        $totalFull = $cnt;
                     }
                 }
-                if ($total !== null && $total > 0)
-                {
-                    $rows = $store->fetchIdRange($startId, $endId);
-                    if ($store->isCompleteConsecutiveSlice($rows, $startId, $perPage))
-                    {
-                        $items = [];
-                        foreach ($rows as $r)
-                        {
-                            $items[] = [
-                                'id' => (int) $r['id'],
-                                'name' => (string) $r['name'],
-                                'image' => (string) $r['image'],
-                            ];
-                        }
-                        $totalPages = $perPage > 0 ? max(1, (int) ceil($total / $perPage)) : 1;
+            }
+            if ($totalFull === null || $totalFull <= 0)
+            {
+                $peek = $this->api->getPokemonList(0, 1);
+                $totalFull = (int) ($peek['count'] ?? 0);
+            }
+        }
+        catch (Throwable)
+        {
+            $totalFull = 0;
+        }
+        if ($totalFull <= 0)
+        {
+            return [
+                'items' => [],
+                'page' => 1,
+                'per_page' => $perPage,
+                'total' => 0,
+                'total_pages' => 1,
+            ];
+        }
 
-                        return [
-                            'items' => $items,
-                            'page' => $page,
-                            'per_page' => $perPage,
-                            'total' => $total,
-                            'total_pages' => $totalPages,
+        [$lo, $hi] = $this->boundIdRange($idMin, $idMax, $totalFull);
+        $subset = max(0, $hi - $lo + 1);
+        if ($subset <= 0)
+        {
+            return [
+                'items' => [],
+                'page' => 1,
+                'per_page' => $perPage,
+                'total' => 0,
+                'total_pages' => 1,
+                'national_total' => $totalFull,
+                'id_range' => ['min' => $lo, 'max' => $hi],
+            ];
+        }
+        $totalPages = $perPage > 0 ? max(1, (int) ceil($subset / $perPage)) : 1;
+        $page = min($page, $totalPages);
+        $startId = $lo + ($page - 1) * $perPage;
+        $endId = min($startId + $perPage - 1, $hi);
+        $needCount = $endId - $startId + 1;
+
+        if ($store !== null)
+        {
+            try
+            {
+                $rows = $store->fetchIdRange($startId, $endId);
+                if ($store->isCompleteConsecutiveSlice($rows, $startId, $needCount))
+                {
+                    $items = [];
+                    foreach ($rows as $r)
+                    {
+                        $items[] = [
+                            'id' => (int) $r['id'],
+                            'name' => (string) $r['name'],
+                            'image' => (string) $r['image'],
                         ];
                     }
+                    $out = [
+                        'items' => $items,
+                        'page' => $page,
+                        'per_page' => $perPage,
+                        'total' => $subset,
+                        'total_pages' => $totalPages,
+                        'national_total' => $totalFull,
+                        'id_range' => ['min' => $lo, 'max' => $hi],
+                    ];
+                    if ($idMin !== null)
+                    {
+                        $out['id_min_filter'] = $idMin;
+                    }
+                    if ($idMax !== null)
+                    {
+                        $out['id_max_filter'] = $idMax;
+                    }
+
+                    return $out;
                 }
             }
             catch (Throwable)
@@ -253,10 +358,9 @@ class PokemonModel
             }
         }
 
-        $pageData = $this->api->getPokemonList($offset, $perPage);
+        $offset = $startId - 1;
+        $pageData = $this->api->getPokemonList($offset, $needCount);
         $results = $pageData['results'] ?? [];
-        $total = isset($pageData['count']) ? (int) $pageData['count'] : 0;
-        $totalPages = $perPage > 0 ? max(1, (int) ceil($total / $perPage)) : 1;
 
         $items = [];
         foreach ($results as $row)
@@ -268,17 +372,21 @@ class PokemonModel
             $url = (string) ($row['url'] ?? '');
             $name = (string) ($row['name'] ?? '');
             $pid = PokeApiService::extractIdFromUrl($url);
+            if ($pid < $lo || $pid > $hi)
+            {
+                continue;
+            }
             $items[] = $this->listItemFromPokemonNameAndId($name, $pid);
         }
 
         $this->persistListItemsCache($store, $items);
-        if ($store !== null && $total > 0)
+        if ($store !== null && $totalFull > 0)
         {
             try
             {
                 if ($store->getNationalTotalCount() === null)
                 {
-                    $store->setNationalTotalCount($total);
+                    $store->setNationalTotalCount($totalFull);
                 }
             }
             catch (Throwable)
@@ -286,19 +394,31 @@ class PokemonModel
             }
         }
 
-        return [
+        $out = [
             'items' => $items,
             'page' => $page,
             'per_page' => $perPage,
-            'total' => $total,
+            'total' => $subset,
             'total_pages' => $totalPages,
+            'national_total' => $totalFull,
+            'id_range' => ['min' => $lo, 'max' => $hi],
         ];
+        if ($idMin !== null)
+        {
+            $out['id_min_filter'] = $idMin;
+        }
+        if ($idMax !== null)
+        {
+            $out['id_max_filter'] = $idMax;
+        }
+
+        return $out;
     }
 
     /**
      * @return array{items: list<array{id:int,name:string,image:string}>, page:int, per_page:int, total:int, total_pages:int, region:string, region_label:string}
      */
-    private function findListPageForRegion(int $page, int $perPage, string $regionSlug): array
+    private function findListPageForRegion(int $page, int $perPage, string $regionSlug, ?int $idMin = null, ?int $idMax = null): array
     {
         $page = max(1, $page);
         $perPage = min(100, max(1, $perPage));
@@ -314,6 +434,42 @@ class PokemonModel
         catch (Throwable $e)
         {
             throw new RuntimeException('Não foi possível carregar a região.', 0, $e);
+        }
+
+        if ($idMin !== null || $idMax !== null)
+        {
+            $maxSp = 0;
+            foreach ($species as $s)
+            {
+                $maxSp = max($maxSp, (int) ($s['species_id'] ?? 0));
+            }
+            $natCap = max($maxSp, 1025);
+            $st = $this->pokemonStore();
+            if ($st !== null)
+            {
+                try
+                {
+                    $tc = $st->getNationalTotalCount();
+                    if ($tc !== null && $tc > 0)
+                    {
+                        $natCap = max($natCap, $tc);
+                    }
+                }
+                catch (Throwable)
+                {
+                }
+            }
+            $bound = $this->boundIdRange($idMin, $idMax, $natCap);
+            $lo = $bound[0];
+            $hi = $bound[1];
+            $species = array_values(array_filter(
+                $species,
+                static function (array $s) use ($lo, $hi): bool {
+                    $sid = (int) ($s['species_id'] ?? 0);
+
+                    return $sid >= $lo && $sid <= $hi;
+                }
+            ));
         }
 
         $total = count($species);
@@ -652,10 +808,20 @@ class PokemonModel
         {
             try
             {
-                $cached = $store->getDetailPayload($detailId);
-                if (is_array($cached) && isset($cached['pokemon'], $cached['evolution_stages']))
+                $row = $store->getDetailPayloadRow($detailId);
+                if ($row !== null)
                 {
-                    return $cached;
+                    $cached = $row['payload'];
+                    if (is_array($cached) && isset($cached['pokemon'], $cached['evolution_stages']))
+                    {
+                        unset($cached['meta']);
+                        $cached['meta'] = [
+                            'detail_source' => 'database',
+                            'detail_cached_at' => $row['updated_at'] !== '' ? $row['updated_at'] : null,
+                        ];
+
+                        return $cached;
+                    }
                 }
             }
             catch (Throwable)
@@ -696,6 +862,11 @@ class PokemonModel
             'pokemon' => $this->mapPokemonRich($pokemon, is_array($species) ? $species : null),
             'evolution_stages' => $evolutionStages,
             'evolution_chain_url' => $evolutionChainUrl,
+        ];
+        $liveAt = (new \DateTimeImmutable('now'))->format(\DateTimeInterface::ATOM);
+        $out['meta'] = [
+            'detail_source' => 'live',
+            'detail_cached_at' => $liveAt,
         ];
         if ($store !== null && $detailId > 0)
         {
