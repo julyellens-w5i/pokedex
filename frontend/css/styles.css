@@ -230,6 +230,60 @@
   border-top: none;
 }
 
+/* ——— Buscas recentes (accordion na sidebar) ——— */
+.sidebar-history-accordion .accordion-button.sidebar-history-toggle {
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.85rem 1rem;
+  box-shadow: none !important;
+  border: none;
+  border-radius: 0;
+  background: linear-gradient(90deg, rgba(230, 57, 70, 0.08), rgba(69, 123, 157, 0.06));
+  color: var(--pk-ink);
+}
+
+.sidebar-history-accordion .accordion-button.sidebar-history-toggle .bi-clock-history {
+  color: var(--pk-red);
+  font-size: 1rem;
+}
+
+.sidebar-history-accordion .accordion-button.sidebar-history-toggle:not(.collapsed) {
+  background: linear-gradient(90deg, rgba(230, 57, 70, 0.1), rgba(69, 123, 157, 0.08));
+  color: var(--pk-ink);
+  box-shadow: none !important;
+}
+
+.sidebar-history-accordion .accordion-button.sidebar-history-toggle::after {
+  filter: opacity(0.65);
+}
+
+.sidebar-history-accordion .accordion-button.sidebar-history-toggle:focus {
+  box-shadow: 0 0 0 2px rgba(230, 57, 70, 0.25) !important;
+  border-color: transparent;
+}
+
+.sidebar-history-accordion .history-accordion-label-expanded {
+  display: none;
+}
+
+.sidebar-history-accordion .accordion-button.sidebar-history-toggle:not(.collapsed) .history-accordion-label-collapsed {
+  display: none;
+}
+
+.sidebar-history-accordion .accordion-button.sidebar-history-toggle:not(.collapsed) .history-accordion-label-expanded {
+  display: inline;
+}
+
+.sidebar-history-collapse-inner {
+  border-top: 1px solid var(--pk-border);
+}
+
+.sidebar-panel-history .sidebar-history-accordion .accordion-item {
+  background: transparent;
+}
+
 .sidebar-panel .favorite-row {
   gap: 0.5rem;
 }
@@ -915,6 +969,19 @@
 [data-theme='dark'] .sidebar-panel .sidebar-head {
   color: var(--pk-ink);
   background: linear-gradient(90deg, rgba(230, 57, 70, 0.2), rgba(69, 123, 157, 0.14));
+}
+
+[data-theme='dark'] .sidebar-history-accordion .accordion-button.sidebar-history-toggle {
+  background: linear-gradient(90deg, rgba(230, 57, 70, 0.2), rgba(69, 123, 157, 0.14));
+  color: var(--pk-ink);
+}
+
+[data-theme='dark'] .sidebar-history-accordion .accordion-button.sidebar-history-toggle:not(.collapsed) {
+  background: linear-gradient(90deg, rgba(230, 57, 70, 0.24), rgba(69, 123, 157, 0.18));
+}
+
+[data-theme='dark'] .sidebar-history-accordion .accordion-button.sidebar-history-toggle::after {
+  filter: invert(1) opacity(0.65);
 }
 
 /* Paginação — links claros do Bootstrap no fundo escuro */
