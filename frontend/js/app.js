@@ -1,5 +1,5 @@
 /**
- * Pokédex — Vanilla JS + Bootstrap + API PHP local
+ * Pokédex — JavaScript + Bootstrap + API PHP local
  */
 (function () {
   'use strict';
@@ -140,7 +140,7 @@
     const name = escapeHtml(item.name);
     const num = String(item.id).padStart(4, '0');
     return `
-      <div class="col-6 col-sm-4 col-md-3 col-lg-2">
+      <div class="col">
         <div class="card pokemon-card h-100 shadow-sm" data-name="${name}" data-id="${item.id}" role="button" tabindex="0" aria-label="Ver detalhes de ${name}">
           <img src="${escapeHtml(item.image)}" class="card-img-top" alt="Arte de ${name}" loading="lazy"
             onerror="this.onerror=null;this.src='https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${item.id}.png'">
