@@ -37,6 +37,14 @@ class FavoriteModel
         {
             return false;
         }
+        try
+        {
+            (new PokemonStorageModel())->ensurePokemonRowForFavorite($pokemonId, $nome);
+        }
+        catch (Throwable)
+        {
+            /* sem tabela pokemon ou falha transitória — INSERT pode falhar na FK */
+        }
         $sql = 'INSERT INTO favorites (pokemon_id, nome, data_registro) VALUES (:pid, :nome, NOW())';
         try
         {

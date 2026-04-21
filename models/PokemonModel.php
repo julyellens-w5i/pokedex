@@ -9,10 +9,84 @@ declare(strict_types=1);
 class PokemonModel
 {
     private PokeApiService $api;
+    private ?PokemonStorageModel $pokemonStore = null;
 
     public function __construct(?PokeApiService $api = null)
     {
         $this->api = $api ?? new PokeApiService();
+    }
+
+    private function pokemonStore(): ?PokemonStorageModel
+    {
+        if (!PokemonStorageModel::available())
+        {
+            return null;
+        }
+        try
+        {
+            if ($this->pokemonStore === null)
+            {
+                $this->pokemonStore = new PokemonStorageModel();
+            }
+
+            return $this->pokemonStore;
+        }
+        catch (Throwable)
+        {
+            return null;
+        }
+    }
+
+    /**
+     * @param list<array{id:int,name:string,image:string}> $items
+     */
+    private function persistListItemsCache(?PokemonStorageModel $store, array $items): void
+    {
+        if ($store === null || $items === [])
+        {
+            return;
+        }
+        try
+        {
+            $store->upsertItems($items);
+        }
+        catch (Throwable)
+        {
+            /* tabela ausente ou erro transitório — segue só com API */
+        }
+    }
+
+    /**
+     * @param list<array{id:int,name:string,image:string}> $items
+     * @return list<array{id:int,name:string,image:string}>
+     */
+    private function hydrateListItemsFromDb(?PokemonStorageModel $store, array $items): array
+    {
+        if ($store === null || $items === [])
+        {
+            return $items;
+        }
+        try
+        {
+            $ids = [];
+            foreach ($items as $it)
+            {
+                $ids[] = (int) ($it['id'] ?? 0);
+            }
+            $fromDb = $store->fetchByIds($ids);
+            $out = [];
+            foreach ($items as $it)
+            {
+                $id = (int) ($it['id'] ?? 0);
+                $out[] = $fromDb[$id] ?? $it;
+            }
+
+            return $out;
+        }
+        catch (Throwable)
+        {
+            return $items;
+        }
     }
 
     /**
@@ -48,6 +122,56 @@ class PokemonModel
         $page = max(1, $page);
         $perPage = min(100, max(1, $perPage));
         $offset = ($page - 1) * $perPage;
+        $startId = $offset + 1;
+        $endId = $offset + $perPage;
+
+        $store = $this->pokemonStore();
+        if ($store !== null)
+        {
+            try
+            {
+                $total = $store->getNationalTotalCount();
+                if ($total === null)
+                {
+                    $peek = $this->api->getPokemonList(0, 1);
+                    $cnt = (int) ($peek['count'] ?? 0);
+                    if ($cnt > 0)
+                    {
+                        $store->setNationalTotalCount($cnt);
+                        $total = $cnt;
+                    }
+                }
+                if ($total !== null && $total > 0)
+                {
+                    $rows = $store->fetchIdRange($startId, $endId);
+                    if ($store->isCompleteConsecutiveSlice($rows, $startId, $perPage))
+                    {
+                        $items = [];
+                        foreach ($rows as $r)
+                        {
+                            $items[] = [
+                                'id' => (int) $r['id'],
+                                'name' => (string) $r['name'],
+                                'image' => (string) $r['image'],
+                            ];
+                        }
+                        $totalPages = $perPage > 0 ? max(1, (int) ceil($total / $perPage)) : 1;
+
+                        return [
+                            'items' => $items,
+                            'page' => $page,
+                            'per_page' => $perPage,
+                            'total' => $total,
+                            'total_pages' => $totalPages,
+                        ];
+                    }
+                }
+            }
+            catch (Throwable)
+            {
+                /* fallback: PokeAPI */
+            }
+        }
 
         $pageData = $this->api->getPokemonList($offset, $perPage);
         $results = $pageData['results'] ?? [];
@@ -65,6 +189,21 @@ class PokemonModel
             $name = (string) ($row['name'] ?? '');
             $pid = PokeApiService::extractIdFromUrl($url);
             $items[] = $this->listItemFromPokemonNameAndId($name, $pid);
+        }
+
+        $this->persistListItemsCache($store, $items);
+        if ($store !== null && $total > 0)
+        {
+            try
+            {
+                if ($store->getNationalTotalCount() === null)
+                {
+                    $store->setNationalTotalCount($total);
+                }
+            }
+            catch (Throwable)
+            {
+            }
         }
 
         return [
@@ -107,6 +246,10 @@ class PokemonModel
         {
             $items[] = $this->listItemFromPokemonNameAndId($row['name'], $row['species_id']);
         }
+
+        $store = $this->pokemonStore();
+        $items = $this->hydrateListItemsFromDb($store, $items);
+        $this->persistListItemsCache($store, $items);
 
         return [
             'items' => $items,
@@ -165,27 +308,77 @@ class PokemonModel
         }
         else
         {
-            $pageData = $this->api->getFullPokemonIndex();
-            $candidates = [];
-            foreach ($pageData['results'] ?? [] as $row)
-            {
-                if (!is_array($row))
-                {
-                    continue;
-                }
-                $url = (string) ($row['url'] ?? '');
-                $name = strtolower(trim((string) ($row['name'] ?? '')));
-                if ($name === '')
-                {
-                    continue;
-                }
-                $candidates[] = [
-                    'name' => $name,
-                    'id' => PokeApiService::extractIdFromUrl($url),
-                ];
-            }
             $scope = 'national';
             $scopeLabel = 'Pokédex Nacional';
+            $candidates = [];
+            $store = $this->pokemonStore();
+            $fromDb = false;
+            if ($store !== null)
+            {
+                try
+                {
+                    $metaTotal = $store->getNationalTotalCount();
+                    if ($metaTotal !== null && $store->countPokemon() >= $metaTotal)
+                    {
+                        foreach ($store->fetchAllForNationalIndex() as $r)
+                        {
+                            $n = (string) ($r['name'] ?? '');
+                            $id = (int) ($r['id'] ?? 0);
+                            if ($n === '' || $id <= 0)
+                            {
+                                continue;
+                            }
+                            $candidates[] = [
+                                'name' => $n,
+                                'id' => $id,
+                            ];
+                        }
+                        $fromDb = $candidates !== [];
+                    }
+                }
+                catch (Throwable)
+                {
+                    $candidates = [];
+                    $fromDb = false;
+                }
+            }
+            if (!$fromDb)
+            {
+                $pageData = $this->api->getFullPokemonIndex();
+                $candidates = [];
+                $toUpsert = [];
+                foreach ($pageData['results'] ?? [] as $row)
+                {
+                    if (!is_array($row))
+                    {
+                        continue;
+                    }
+                    $url = (string) ($row['url'] ?? '');
+                    $name = strtolower(trim((string) ($row['name'] ?? '')));
+                    if ($name === '')
+                    {
+                        continue;
+                    }
+                    $pid = PokeApiService::extractIdFromUrl($url);
+                    $candidates[] = [
+                        'name' => $name,
+                        'id' => $pid,
+                    ];
+                    $toUpsert[] = $this->listItemFromPokemonNameAndId($name, $pid);
+                }
+                $this->persistListItemsCache($store, $toUpsert);
+                $cntFromApi = (int) ($pageData['count'] ?? 0);
+                if ($store !== null && $cntFromApi > 0)
+                {
+                    try
+                    {
+                        $store->setNationalTotalCount($cntFromApi);
+                    }
+                    catch (Throwable)
+                    {
+                    }
+                }
+            }
         }
 
         $isDigits = (bool) preg_match('/^\d+$/', $q);
@@ -244,6 +437,10 @@ class PokemonModel
         {
             $items[] = $this->listItemFromPokemonNameAndId($m['name'], $m['id']);
         }
+
+        $store = $this->pokemonStore();
+        $items = $this->hydrateListItemsFromDb($store, $items);
+        $this->persistListItemsCache($store, $items);
 
         return [
             'items' => $items,
