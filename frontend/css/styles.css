@@ -492,6 +492,34 @@
 }
 
 /* ——— Evoluções ——— */
+.evolution-flow-vertical {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.evolution-flow-vertical .evolution-stage-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.evolution-arrow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin: 0.15rem 0 0.25rem;
+  color: var(--pk-muted);
+  font-size: 1.35rem;
+  line-height: 1;
+  opacity: 0.85;
+}
+
 .evolution-card {
   flex: 1 1 120px;
   max-width: 168px;

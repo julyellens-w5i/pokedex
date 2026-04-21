@@ -376,14 +376,14 @@
             </div>`;
         })
         .join('');
-      parts.push(`<div class="d-flex flex-wrap align-items-stretch gap-2 justify-content-start">${cards}</div>`);
+      parts.push(`<div class="evolution-stage-row">${cards}</div>`);
       if (gi < stages.length - 1) {
         parts.push(
-          '<div class="text-center text-muted my-1"><i class="bi bi-chevron-down" aria-hidden="true"></i></div>'
+          '<div class="evolution-arrow" role="presentation" aria-hidden="true"><i class="bi bi-chevron-down"></i></div>'
         );
       }
     }
-    return `<div class="evolution-flow">${parts.join('')}</div>`;
+    return `<div class="evolution-flow evolution-flow-vertical">${parts.join('')}</div>`;
   }
 
   function renderDetail(data) {
