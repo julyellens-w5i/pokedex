@@ -1,4 +1,4 @@
 cache/*.json
 !.gitkeep
-
 config/.env
+config/config.php
