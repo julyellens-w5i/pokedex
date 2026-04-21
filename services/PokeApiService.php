@@ -131,6 +131,15 @@ class PokeApiService
         return $this->fetchJson($chainUrl);
     }
 
+    /** Pokémon que possuem o tipo (ex.: fire, water). */
+    public function getTypeByName(string $slug): array
+    {
+        $q = rawurlencode(strtolower(trim($slug)));
+        $url = POKEAPI_BASE . '/type/' . $q;
+
+        return $this->fetchJson($url);
+    }
+
     /**
      * Extrai ID numérico do final da URL da PokeAPI.
      */
