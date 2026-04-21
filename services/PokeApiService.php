@@ -38,6 +38,39 @@ class PokeApiService
 
     private function httpGet(string $url): string
     {
+        $maxAttempts = 4;
+        $lastException = null;
+        for ($attempt = 1; $attempt <= $maxAttempts; $attempt++)
+        {
+            try
+            {
+                return $this->httpGetOnce($url);
+            }
+            catch (InvalidArgumentException $e)
+            {
+                throw $e;
+            }
+            catch (Throwable $e)
+            {
+                $lastException = $e;
+                if ($attempt >= $maxAttempts)
+                {
+                    break;
+                }
+                $delayMs = (int) (300 * (2 ** ($attempt - 1)));
+                usleep($delayMs * 1000);
+            }
+        }
+        throw $lastException instanceof Throwable
+            ? $lastException
+            : new RuntimeException('Falha ao obter dados da PokeAPI.');
+    }
+
+    /**
+     * Uma tentativa GET (sem retry).
+     */
+    private function httpGetOnce(string $url): string
+    {
         if (function_exists('curl_init'))
         {
             $ch = curl_init($url);
@@ -58,6 +91,10 @@ class PokeApiService
             if ($code === 404)
             {
                 throw new InvalidArgumentException('Recurso não encontrado.');
+            }
+            if ($code === 429 || $code === 502 || $code === 503 || $code === 504)
+            {
+                throw new RuntimeException('PokeAPI temporariamente indisponível (HTTP ' . $code . ').');
             }
             if ($code < 200 || $code >= 300)
             {
