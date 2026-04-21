@@ -59,10 +59,41 @@
     compareB: document.getElementById('compareB'),
     btnRunCompare: document.getElementById('btnRunCompare'),
     compareResult: document.getElementById('compareResult'),
+    catalogLive: document.getElementById('catalogLiveRegion'),
+    filterIdMin: document.getElementById('filterIdMin'),
+    filterIdMax: document.getElementById('filterIdMax'),
+    btnApplyFilters: document.getElementById('btnApplyFilters'),
+    btnResetFilters: document.getElementById('btnResetFilters'),
+    btnDensity: document.getElementById('btnDensity'),
+    btnShortcuts: document.getElementById('btnShortcuts'),
+    btnCollections: document.getElementById('btnCollections'),
+    btnQuiz: document.getElementById('btnQuiz'),
+    btnA11y: document.getElementById('btnA11y'),
+    regionProgress: document.getElementById('regionProgress'),
+    shortcutsModal: document.getElementById('shortcutsModal'),
+    collectionsModal: document.getElementById('collectionsModal'),
+    quizModal: document.getElementById('quizModal'),
+    a11yModal: document.getElementById('a11yModal'),
+    collectionListEl: document.getElementById('collectionListEl'),
+    collectionItemsEl: document.getElementById('collectionItemsEl'),
+    newCollectionName: document.getElementById('newCollectionName'),
+    btnCreateCollection: document.getElementById('btnCreateCollection'),
+    quizSilhouette: document.getElementById('quizSilhouette'),
+    quizChoices: document.getElementById('quizChoices'),
+    quizFeedback: document.getElementById('quizFeedback'),
+    btnQuizNext: document.getElementById('btnQuizNext'),
+    btnFontSmaller: document.getElementById('btnFontSmaller'),
+    btnFontReset: document.getElementById('btnFontReset'),
+    btnFontLarger: document.getElementById('btnFontLarger'),
+    btnToggleHc: document.getElementById('btnToggleHc'),
   };
 
   const modal = els.modalEl ? new bootstrap.Modal(els.modalEl) : null;
   const compareModalBootstrap = els.compareModal ? new bootstrap.Modal(els.compareModal) : null;
+  const shortcutsModalBootstrap = els.shortcutsModal ? new bootstrap.Modal(els.shortcutsModal) : null;
+  const collectionsModalBootstrap = els.collectionsModal ? new bootstrap.Modal(els.collectionsModal) : null;
+  const quizModalBootstrap = els.quizModal ? new bootstrap.Modal(els.quizModal) : null;
+  const a11yModalBootstrap = els.a11yModal ? new bootstrap.Modal(els.a11yModal) : null;
   const toast = els.toastEl ? new bootstrap.Toast(els.toastEl, { delay: 3200 }) : null;
 
   let currentDetail = null;
@@ -71,6 +102,11 @@
   const LS_SOUND = 'pokedex_sound';
   const LS_RECENT = 'pokedex_recent_v1';
   const LS_STATS = 'pokedex_stats_v1';
+  const LS_DENSITY = 'pokedex_density';
+  const LS_FONT_SCALE = 'pokedex_font_scale';
+  const LS_HIGH_CONTRAST = 'pokedex_high_contrast';
+  const LS_REGION_SEEN = 'pokedex_region_seen_v1';
+  const LS_QUIZ_SCORE = 'pokedex_quiz_score_v1';
 
   function skeletonGridHtml() {
     const n = Math.min(20, Math.max(1, state.perPage || 20));
@@ -172,9 +208,10 @@
       return {
         views: parseInt(String(o.views || '0'), 10) || 0,
         favAdds: parseInt(String(o.favAdds || '0'), 10) || 0,
+        quizHits: parseInt(String(o.quizHits || '0'), 10) || 0,
       };
     } catch (e) {
-      return { views: 0, favAdds: 0 };
+      return { views: 0, favAdds: 0, quizHits: 0 };
     }
   }
 
@@ -188,6 +225,7 @@
     const s = readStats();
     if (kind === 'views') s.views += 1;
     if (kind === 'favadd') s.favAdds += 1;
+    if (kind === 'quiz') s.quizHits += 1;
     writeStats(s);
     renderAchievements();
   }
@@ -201,9 +239,11 @@
       { k: 'views', n: 25, label: 'Ver 25 detalhes' },
       { k: 'favadd', n: 1, label: '1 favorito adicionado' },
       { k: 'favadd', n: 5, label: '5 favoritos' },
+      { k: 'quizHits', n: 1, label: 'Acertar 1 quiz' },
+      { k: 'quizHits', n: 10, label: 'Acertar 10 quizzes' },
     ];
     const lines = milestones.map((m) => {
-      const v = m.k === 'views' ? s.views : s.favAdds;
+      const v = m.k === 'views' ? s.views : m.k === 'favadd' ? s.favAdds : s.quizHits;
       const ok = v >= m.n;
       return `<li class="list-group-item py-2 d-flex align-items-center gap-2"><span class="${ok ? 'text-success' : 'text-muted'}">${ok ? '✓' : '○'}</span><span>${escapeHtml(m.label)}</span></li>`;
     });
@@ -394,6 +434,18 @@
         <div class="compare-stat-val ${cA}" aria-label="${ariaA}">${va}</div>
         <div class="compare-stat-val ${cB}" aria-label="${ariaB}">${vb}</div>`);
     }
+    const bstA = (pA.stats || []).reduce((s, x) => s + Number(x.base || 0), 0);
+    const bstB = (pB.stats || []).reduce((s, x) => s + Number(x.base || 0), 0);
+    const cBST = compareStatHighlightClasses(bstA, bstB);
+    if (Number.isFinite(bstA) && Number.isFinite(bstB)) {
+      if (bstA > bstB) winsA += 1;
+      else if (bstB > bstA) winsB += 1;
+      else ties += 1;
+    }
+    cells.push(`
+        <div class="compare-stat-name">Total base (BST)</div>
+        <div class="compare-stat-val ${cBST[0]}" aria-label="Soma das stats base">${bstA}</div>
+        <div class="compare-stat-val ${cBST[1]}" aria-label="Soma das stats base">${bstB}</div>`);
     const shortA = escapeHtml((pA.name_display || pA.name || 'A').split(' ')[0]);
     const shortB = escapeHtml((pB.name_display || pB.name || 'B').split(' ')[0]);
     const summaryParts = [];
@@ -456,7 +508,11 @@
 
   function registerServiceWorkerSafe() {
     if (!('serviceWorker' in navigator)) return;
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    const path = window.location.pathname || '/';
+    const idx = path.indexOf('/frontend');
+    const swUrl = idx === -1 ? 'sw.js' : path.slice(0, idx) + '/sw.js';
+    const scope = idx === -1 ? './' : path.slice(0, idx) + '/';
+    navigator.serviceWorker.register(swUrl, { scope }).catch(() => {});
   }
 
   function bindGlobalShortcuts() {
@@ -473,6 +529,18 @@
         if (els.modalEl && els.modalEl.classList.contains('show') && modal) modal.hide();
         if (els.compareModal && els.compareModal.classList.contains('show') && compareModalBootstrap) {
           compareModalBootstrap.hide();
+        }
+        if (els.shortcutsModal && els.shortcutsModal.classList.contains('show') && shortcutsModalBootstrap) {
+          shortcutsModalBootstrap.hide();
+        }
+        if (els.collectionsModal && els.collectionsModal.classList.contains('show') && collectionsModalBootstrap) {
+          collectionsModalBootstrap.hide();
+        }
+        if (els.quizModal && els.quizModal.classList.contains('show') && quizModalBootstrap) {
+          quizModalBootstrap.hide();
+        }
+        if (els.a11yModal && els.a11yModal.classList.contains('show') && a11yModalBootstrap) {
+          a11yModalBootstrap.hide();
         }
       }
     });
@@ -496,17 +564,34 @@
     toast.show();
   }
 
-  async function fetchJson(url, options = {}) {
-    const res = await fetch(url, {
-      ...options,
-      headers: {
-        Accept: 'application/json',
-        ...(options.headers || {}),
-      },
-    });
+  async function fetchJson(url, options = {}, attempt = 1) {
+    const maxAttempts = 4;
+    let res;
+    try {
+      res = await fetch(url, {
+        ...options,
+        headers: {
+          Accept: 'application/json',
+          ...(options.headers || {}),
+        },
+      });
+    } catch (netErr) {
+      if (attempt < maxAttempts) {
+        await new Promise((r) => setTimeout(r, 300 * 2 ** (attempt - 1)));
+        return fetchJson(url, options, attempt + 1);
+      }
+      throw netErr instanceof Error ? netErr : new Error('Falha de rede');
+    }
     const data = await res.json().catch(() => ({}));
     if (!res.ok || data.success === false) {
       const err = data.error || res.statusText || 'Erro na requisição';
+      if (
+        attempt < maxAttempts &&
+        (res.status === 429 || res.status === 502 || res.status === 503 || res.status === 504)
+      ) {
+        await new Promise((r) => setTimeout(r, 300 * 2 ** (attempt - 1)));
+        return fetchJson(url, options, attempt + 1);
+      }
       throw new Error(err);
     }
     return data;
@@ -567,17 +652,348 @@
   function cardHtml(item) {
     const name = escapeHtml(item.name);
     const num = String(item.id).padStart(4, '0');
+    const rawName = String(item.name);
+    const href = './?pokemon=' + encodeURIComponent(rawName);
     return `
       <div class="col">
-        <div class="card pokemon-card h-100 shadow-sm" data-name="${name}" data-id="${item.id}" role="button" tabindex="0" aria-label="Ver detalhes de ${name}">
+        <a href="${href}" class="card pokemon-card h-100 shadow-sm text-decoration-none text-reset d-block" data-name="${name}" data-id="${item.id}" role="link" tabindex="0" aria-label="Ver detalhes de ${name}">
           <img src="${escapeHtml(item.image)}" class="card-img-top" alt="Arte de ${name}" loading="lazy"
             onerror="this.onerror=null;this.src='https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${item.id}.png'">
           <div class="card-body py-2 px-2 text-center">
             <div class="poke-number">#${num}</div>
             <div class="fw-semibold text-capitalize small">${name}</div>
           </div>
-        </div>
+        </a>
       </div>`;
+  }
+
+  function buildListUrl(page) {
+    let url =
+      API_BASE +
+      'list.php?page=' +
+      encodeURIComponent(String(page)) +
+      '&limit=' +
+      encodeURIComponent(String(state.perPage));
+    const region = els.regionFilter && els.regionFilter.value ? els.regionFilter.value.trim() : '';
+    if (region) {
+      url += '&region=' + encodeURIComponent(region);
+    }
+    const typeSlug = els.typeFilter && !els.typeFilter.disabled && els.typeFilter.value ? els.typeFilter.value.trim() : '';
+    if (typeSlug) {
+      url += '&type=' + encodeURIComponent(typeSlug);
+    }
+    const idMinRaw = els.filterIdMin && els.filterIdMin.value.trim();
+    const idMaxRaw = els.filterIdMax && els.filterIdMax.value.trim();
+    const idMin = idMinRaw ? parseInt(String(idMinRaw), 10) : 0;
+    const idMax = idMaxRaw ? parseInt(String(idMaxRaw), 10) : 0;
+    if (Number.isFinite(idMin) && idMin > 0) {
+      url += '&id_min=' + encodeURIComponent(String(idMin));
+    }
+    if (Number.isFinite(idMax) && idMax > 0) {
+      url += '&id_max=' + encodeURIComponent(String(idMax));
+    }
+    return url;
+  }
+
+  function announceCatalog(message) {
+    const el = els.catalogLive;
+    if (!el) return;
+    el.textContent = '';
+    requestAnimationFrame(() => {
+      el.textContent = message;
+    });
+  }
+
+  function prefetchListAdjacent() {
+    if (state.searchActive) return;
+    const tp = state.totalPages;
+    const p = state.page;
+    const urls = [];
+    if (p < tp) urls.push(buildListUrl(p + 1));
+    if (p > 1) urls.push(buildListUrl(p - 1));
+    urls.forEach((u) => {
+      fetch(u, { headers: { Accept: 'application/json' } }).catch(() => {});
+    });
+  }
+
+  function regionProgressKey() {
+    return (els.regionFilter && els.regionFilter.value) || '__national__';
+  }
+
+  function recordRegionSeen(pokemonId) {
+    try {
+      const k = regionProgressKey();
+      const raw = localStorage.getItem(LS_REGION_SEEN);
+      const o = raw ? JSON.parse(raw) : {};
+      if (!o[k]) o[k] = [];
+      const id = String(pokemonId);
+      if (!o[k].includes(id)) {
+        o[k].push(id);
+        if (o[k].length > 2000) o[k] = o[k].slice(-2000);
+      }
+      localStorage.setItem(LS_REGION_SEEN, JSON.stringify(o));
+      renderRegionProgress();
+    } catch (e) {}
+  }
+
+  function renderRegionProgress() {
+    if (!els.regionProgress) return;
+    const k = regionProgressKey();
+    let o = {};
+    try {
+      o = JSON.parse(localStorage.getItem(LS_REGION_SEEN) || '{}');
+    } catch (e) {}
+    const arr = o[k] || [];
+    const label = k === '__national__' ? 'Pokédex nacional' : k;
+    const total = state.total || 0;
+    els.regionProgress.innerHTML = `<span class="text-body-secondary">${escapeHtml(label)}: <strong class="text-body">${arr.length}</strong> espécies únicas abertas nos detalhes${
+      total ? ` · lista atual: <strong class="text-body">${total}</strong> entradas` : ''
+    }</span>`;
+  }
+
+  function applyDensityUi() {
+    const wrap = document.getElementById('catalogGridWrap');
+    if (!wrap) return;
+    let mode = 'comfy';
+    try {
+      mode = localStorage.getItem(LS_DENSITY) === 'compact' ? 'compact' : 'comfy';
+    } catch (e) {}
+    wrap.classList.toggle('catalog-density-compact', mode === 'compact');
+    if (els.btnDensity) {
+      els.btnDensity.title = mode === 'compact' ? 'Vista confortável' : 'Vista compacta';
+    }
+  }
+
+  function toggleDensity() {
+    try {
+      const cur = localStorage.getItem(LS_DENSITY) === 'compact' ? 'compact' : 'comfy';
+      localStorage.setItem(LS_DENSITY, cur === 'compact' ? 'comfy' : 'compact');
+    } catch (e) {}
+    applyDensityUi();
+    showToast('Densidade da lista alterada.');
+  }
+
+  function initA11yFromStorage() {
+    let scale = 1;
+    try {
+      const s = parseFloat(localStorage.getItem(LS_FONT_SCALE) || '1');
+      if (Number.isFinite(s) && s >= 0.85 && s <= 1.35) scale = s;
+    } catch (e) {}
+    document.documentElement.style.setProperty('--pk-font-scale', String(scale));
+    let hc = false;
+    try {
+      hc = localStorage.getItem(LS_HIGH_CONTRAST) === '1';
+    } catch (e) {}
+    document.documentElement.toggleAttribute('data-a11y-hc', hc);
+  }
+
+  function setFontScale(delta) {
+    let s = 1;
+    try {
+      s = parseFloat(localStorage.getItem(LS_FONT_SCALE) || '1');
+    } catch (e) {}
+    s = Math.min(1.35, Math.max(0.85, s + delta));
+    try {
+      localStorage.setItem(LS_FONT_SCALE, String(s));
+    } catch (e) {}
+    document.documentElement.style.setProperty('--pk-font-scale', String(s));
+    showToast('Tamanho do texto ajustado.');
+  }
+
+  function toggleHighContrast() {
+    const on = !document.documentElement.hasAttribute('data-a11y-hc');
+    document.documentElement.toggleAttribute('data-a11y-hc', on);
+    try {
+      localStorage.setItem(LS_HIGH_CONTRAST, on ? '1' : '0');
+    } catch (e) {}
+    showToast(on ? 'Alto contraste ativado' : 'Alto contraste desativado');
+  }
+
+  let quizAnswerName = '';
+
+  async function loadCollectionSelectOptions(selectEl) {
+    if (!selectEl) return;
+    selectEl.innerHTML = '<option value="">— Coleção —</option>';
+    try {
+      const j = await fetchJson(API_BASE + 'collections.php');
+      const rows = j.data || [];
+      rows.forEach((r) => {
+        const id = r.id != null ? String(r.id) : '';
+        const nome = r.nome != null ? String(r.nome) : '';
+        if (!id) return;
+        const opt = document.createElement('option');
+        opt.value = id;
+        opt.textContent = nome + (r.item_count != null ? ` (${r.item_count})` : '');
+        selectEl.appendChild(opt);
+      });
+    } catch (e) {
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = 'Coleções indisponíveis';
+      selectEl.appendChild(opt);
+    }
+  }
+
+  async function refreshCollectionsPanel() {
+    if (!els.collectionListEl) return;
+    els.collectionListEl.innerHTML = '<li class="list-group-item text-muted">Carregando…</li>';
+    try {
+      const j = await fetchJson(API_BASE + 'collections.php');
+      const rows = j.data || [];
+      if (!rows.length) {
+        els.collectionListEl.innerHTML = '<li class="list-group-item small text-muted">Nenhuma coleção. Crie uma acima.</li>';
+        return;
+      }
+      els.collectionListEl.innerHTML = rows
+        .map((r) => {
+          const id = r.id != null ? String(r.id) : '';
+          const nome = escapeHtml(r.nome != null ? String(r.nome) : '');
+          const c = r.item_count != null ? String(r.item_count) : '0';
+          return `<li class="list-group-item d-flex justify-content-between align-items-center gap-2">
+            <button type="button" class="btn btn-link btn-sm text-start p-0 js-open-collection" data-collection-id="${escapeHtml(id)}">${nome} <span class="text-muted">(${c})</span></button>
+            <button type="button" class="btn btn-sm btn-outline-danger js-del-collection" data-collection-id="${escapeHtml(id)}" title="Apagar coleção">×</button>
+          </li>`;
+        })
+        .join('');
+      els.collectionListEl.querySelectorAll('.js-open-collection').forEach((btn) => {
+        btn.addEventListener('click', () => loadCollectionItems(parseInt(btn.getAttribute('data-collection-id'), 10)));
+      });
+      els.collectionListEl.querySelectorAll('.js-del-collection').forEach((btn) => {
+        btn.addEventListener('click', async () => {
+          const id = parseInt(btn.getAttribute('data-collection-id'), 10);
+          if (!id || !confirm('Apagar esta coleção?')) return;
+          try {
+            await fetchJson(API_BASE + 'collections.php?id=' + encodeURIComponent(String(id)), { method: 'DELETE' });
+            showToast('Coleção removida.');
+            refreshCollectionsPanel();
+            if (els.collectionItemsEl) els.collectionItemsEl.innerHTML = '';
+          } catch (e) {
+            showToast(e.message || 'Erro', true);
+          }
+        });
+      });
+    } catch (e) {
+      els.collectionListEl.innerHTML = '<li class="list-group-item small text-danger">Sem base de dados ou tabelas em falta.</li>';
+    }
+  }
+
+  async function loadCollectionItems(collectionId) {
+    if (!els.collectionItemsEl || !collectionId) return;
+    els.collectionItemsEl.innerHTML = '<li class="list-group-item text-muted">Carregando…</li>';
+    try {
+      const j = await fetchJson(API_BASE + 'collections.php?items=' + encodeURIComponent(String(collectionId)));
+      const rows = j.data || [];
+      if (!rows.length) {
+        els.collectionItemsEl.innerHTML = '<li class="list-group-item small text-muted">Vazio.</li>';
+        return;
+      }
+      els.collectionItemsEl.innerHTML = rows
+        .map((r) => {
+          const pid = r.pokemon_id != null ? String(r.pokemon_id) : '';
+          const nome = r.nome != null ? String(r.nome) : '';
+          return `<li class="list-group-item d-flex justify-content-between align-items-center">
+            <a href="#" class="small js-open-poke" data-open="${escapeHtml(nome)}">#${escapeHtml(pid)} ${escapeHtml(nome)}</a>
+            <button type="button" class="btn btn-sm btn-outline-secondary js-remove-ci" data-cid="${collectionId}" data-pid="${escapeHtml(pid)}">×</button>
+          </li>`;
+        })
+        .join('');
+      els.collectionItemsEl.querySelectorAll('.js-open-poke').forEach((a) => {
+        a.addEventListener('click', (ev) => {
+          ev.preventDefault();
+          const n = a.getAttribute('data-open');
+          if (n) openPokemon(n);
+          if (collectionsModalBootstrap) collectionsModalBootstrap.hide();
+        });
+      });
+      els.collectionItemsEl.querySelectorAll('.js-remove-ci').forEach((b) => {
+        b.addEventListener('click', async () => {
+          const cid = parseInt(b.getAttribute('data-cid'), 10);
+          const pid = parseInt(b.getAttribute('data-pid'), 10);
+          try {
+            await fetchJson(
+              API_BASE + 'collections.php?collection_id=' + encodeURIComponent(String(cid)) + '&pokemon_id=' + encodeURIComponent(String(pid)),
+              { method: 'DELETE' }
+            );
+            loadCollectionItems(cid);
+            refreshCollectionsPanel();
+          } catch (e) {
+            showToast(e.message || 'Erro', true);
+          }
+        });
+      });
+    } catch (e) {
+      els.collectionItemsEl.innerHTML = '<li class="list-group-item small text-danger">Erro ao carregar itens.</li>';
+    }
+  }
+
+  async function startQuizRound() {
+    if (!els.quizSilhouette || !els.quizChoices || !els.quizFeedback) return;
+    els.quizFeedback.textContent = 'A carregar…';
+    els.quizChoices.innerHTML = '';
+    const maxId = Math.max(1, state.total || 1025);
+    const correctId = Math.floor(Math.random() * maxId) + 1;
+    try {
+      const j = await fetchJson(API_BASE + 'pokemon.php?id=' + encodeURIComponent(String(correctId)));
+      const p = j.data && j.data.pokemon ? j.data.pokemon : null;
+      if (!p) throw new Error('Sem dados');
+      quizAnswerName = p.name;
+      const art =
+        p.image ||
+        'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/' + p.id + '.png';
+      els.quizSilhouette.src = art;
+      els.quizSilhouette.alt = 'Silhueta';
+      const wrongIds = new Set();
+      let guard = 0;
+      while (wrongIds.size < 3 && guard < 40) {
+        guard += 1;
+        const w = Math.floor(Math.random() * maxId) + 1;
+        if (w !== correctId) wrongIds.add(w);
+      }
+      const opts = [];
+      for (const wid of wrongIds) {
+        try {
+          const jw = await fetchJson(API_BASE + 'pokemon.php?id=' + encodeURIComponent(String(wid)));
+          const pw = jw.data && jw.data.pokemon ? jw.data.pokemon : null;
+          if (pw && pw.name) opts.push(String(pw.name));
+        } catch (e) {}
+      }
+      opts.push(String(p.name));
+      for (let i = opts.length - 1; i > 0; i--) {
+        const jx = Math.floor(Math.random() * (i + 1));
+        const t = opts[i];
+        opts[i] = opts[jx];
+        opts[jx] = t;
+      }
+      els.quizFeedback.textContent = 'Quem é este Pokémon?';
+      els.quizChoices.innerHTML = opts
+        .map(
+          (n) =>
+            `<button type="button" class="btn btn-outline-primary quiz-choice-btn text-capitalize" data-name="${escapeHtml(n)}">${escapeHtml(
+              n.replace(/-/g, ' ')
+            )}</button>`
+        )
+        .join('');
+      els.quizChoices.querySelectorAll('.quiz-choice-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const guess = btn.getAttribute('data-name');
+          const ok = guess === quizAnswerName;
+          els.quizFeedback.textContent = ok ? 'Correcto!' : 'Errado — era ' + quizAnswerName.replace(/-/g, ' ');
+          let sc = 0;
+          try {
+            sc = parseInt(localStorage.getItem(LS_QUIZ_SCORE) || '0', 10) || 0;
+          } catch (e) {}
+          if (ok) {
+            sc += 1;
+            try {
+              localStorage.setItem(LS_QUIZ_SCORE, String(sc));
+            } catch (e) {}
+            bumpAchievement('quiz');
+          }
+        });
+      });
+    } catch (e) {
+      els.quizFeedback.textContent = 'Não foi possível iniciar o quiz.';
+    }
   }
 
   function updateListMeta(data) {
@@ -747,6 +1163,7 @@
           </div>`;
       updateListMeta();
       renderSearchToolbar();
+      announceCatalog(`Busca: ${items.length} resultado(s) para o termo atual.`);
       window.scrollTo({ top: els.grid.offsetTop ? els.grid.offsetTop - 24 : 0, behavior: 'smooth' });
     } catch (e) {
       if (token === navToken) {
@@ -768,20 +1185,7 @@
     showLoader(true);
     if (els.grid) els.grid.innerHTML = skeletonGridHtml();
     try {
-      let url =
-        API_BASE +
-        'list.php?page=' +
-        encodeURIComponent(String(page)) +
-        '&limit=' +
-        encodeURIComponent(String(state.perPage));
-      const region = els.regionFilter && els.regionFilter.value ? els.regionFilter.value.trim() : '';
-      if (region) {
-        url += '&region=' + encodeURIComponent(region);
-      }
-      const typeSlug = els.typeFilter && !els.typeFilter.disabled && els.typeFilter.value ? els.typeFilter.value.trim() : '';
-      if (typeSlug) {
-        url += '&type=' + encodeURIComponent(typeSlug);
-      }
+      const url = buildListUrl(page);
       const json = await fetchJson(url);
       if (token !== navToken) return;
       const d = json.data || {};
@@ -801,6 +1205,11 @@
 
       updateListMeta(d);
       renderPagination();
+      announceCatalog(
+        `Página ${state.page} de ${state.totalPages}. ${items.length} Pokémon na grelha${state.total ? ` de ${state.total} no filtro` : ''}.`
+      );
+      prefetchListAdjacent();
+      renderRegionProgress();
       window.scrollTo({ top: els.grid.offsetTop ? els.grid.offsetTop - 24 : 0, behavior: 'smooth' });
     } catch (e) {
       if (token === navToken) {
@@ -828,6 +1237,7 @@
       updateFavoriteButton();
       if (currentDetail && currentDetail.pokemon) {
         recordRecentView(currentDetail.pokemon);
+        recordRegionSeen(currentDetail.pokemon.id);
         syncPokemonUrlQuery(currentDetail.pokemon.name || String(currentDetail.pokemon.id));
         bumpAchievement('views');
       }
@@ -926,6 +1336,19 @@
       triviaHtml = `<h6 class="mt-3">Curiosidades</h6><p class="small trivia-box mb-0">${bits.join(' · ')}</p>`;
     }
 
+    let metaHtml = '';
+    const meta = data.meta;
+    if (meta && (meta.detail_cached_at != null || meta.detail_source)) {
+      const src = meta.detail_source === 'database' ? 'Cache na base de dados' : 'Obtidos agora (API)';
+      const t = meta.detail_cached_at != null ? escapeHtml(String(meta.detail_cached_at)) : '—';
+      metaHtml = `<p class="small text-muted mb-2 pokedex-meta-line" role="note"><i class="bi bi-info-circle me-1"></i>${src}. <time datetime="${t}">${t}</time> · <button type="button" class="btn btn-link btn-sm p-0 align-baseline" id="btnExportDetailJson">Exportar JSON</button></p>`;
+    }
+    const collectionBar = `<div class="detail-collection-bar d-flex flex-wrap gap-2 align-items-center mb-3 pb-2 border-bottom border-secondary border-opacity-25">
+      <span class="small text-muted mb-0">Coleção</span>
+      <select id="detailCollectionSelect" class="form-select form-select-sm" style="max-width:14rem" aria-label="Escolher coleção"></select>
+      <button type="button" class="btn btn-sm btn-primary" id="btnDetailAddToCollection">Adicionar à coleção</button>
+    </div>`;
+
     return `
       <div class="row g-3">
         <div class="col-md-5 text-center">
@@ -934,6 +1357,8 @@
           <div>${renderTypeBadges(p.types)}</div>
         </div>
         <div class="col-md-7">
+          ${collectionBar}
+          ${metaHtml}
           <h4 class="mb-1">${escapeHtml(titleName)} <span class="text-muted fs-6">#${String(p.id).padStart(4, '0')}</span></h4>
           ${genusHtml}
           <p class="mb-2"><strong>Altura:</strong> ${h} m &nbsp;|&nbsp; <strong>Peso:</strong> ${w} kg</p>
@@ -955,17 +1380,57 @@
         if (n) openPokemon(n);
       });
     });
+    const ex = els.modalBody.querySelector('#btnExportDetailJson');
+    if (ex) {
+      ex.addEventListener('click', () => {
+        if (!currentDetail) return;
+        const blob = new Blob([JSON.stringify(currentDetail, null, 2)], { type: 'application/json' });
+        const a = document.createElement('a');
+        const pid = currentDetail.pokemon && currentDetail.pokemon.id ? String(currentDetail.pokemon.id) : 'pokemon';
+        a.href = URL.createObjectURL(blob);
+        a.download = 'pokemon-' + pid + '.json';
+        a.click();
+        URL.revokeObjectURL(a.href);
+        showToast('Ficheiro JSON gerado.');
+      });
+    }
+    const sel = els.modalBody.querySelector('#detailCollectionSelect');
+    const addB = els.modalBody.querySelector('#btnDetailAddToCollection');
+    if (sel && addB) {
+      loadCollectionSelectOptions(sel);
+      addB.addEventListener('click', async () => {
+        const cid = parseInt(String(sel.value), 10);
+        if (!cid || !currentDetail || !currentDetail.pokemon) {
+          showToast('Escolha uma coleção.', true);
+          return;
+        }
+        const pid = parseInt(String(currentDetail.pokemon.id), 10);
+        const nome = String(currentDetail.pokemon.name || '').trim();
+        try {
+          await fetchJson(API_BASE + 'collections.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'add', collection_id: cid, pokemon_id: pid, nome }),
+          });
+          showToast('Adicionado à coleção.');
+        } catch (e) {
+          showToast(e.message || 'Não foi possível adicionar', true);
+        }
+      });
+    }
   }
 
   function onGridClick(e) {
-    const card = e.target.closest('.pokemon-card');
+    const card = e.target.closest('a.pokemon-card');
     if (!card) return;
+    if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || e.button !== 0) return;
+    e.preventDefault();
     const name = card.getAttribute('data-name');
     if (name) openPokemon(name);
   }
 
   function onGridKeydown(e) {
-    const card = e.target.closest('.pokemon-card');
+    const card = e.target.closest('a.pokemon-card');
     if (!card) return;
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
@@ -1179,6 +1644,9 @@
     initSoundToggle();
     renderRecentList();
     renderAchievements();
+    applyDensityUi();
+    initA11yFromStorage();
+    renderRegionProgress();
     registerServiceWorkerSafe();
     bindGlobalShortcuts();
 
@@ -1198,12 +1666,80 @@
     if (els.regionFilter) {
       els.regionFilter.addEventListener('change', () => {
         syncTypeFilterEnabled();
+        renderRegionProgress();
         const raw = (els.search && els.search.value ? els.search.value : '').trim();
         if (raw.length >= 2 || /^\d+$/.test(raw)) {
           runGlobalSearch(raw);
         } else {
           loadListPage(1);
         }
+      });
+    }
+    if (els.btnDensity) {
+      els.btnDensity.addEventListener('click', () => toggleDensity());
+    }
+    if (els.btnShortcuts && shortcutsModalBootstrap) {
+      els.btnShortcuts.addEventListener('click', () => shortcutsModalBootstrap.show());
+    }
+    if (els.btnCollections && collectionsModalBootstrap) {
+      els.btnCollections.addEventListener('click', () => {
+        refreshCollectionsPanel();
+        collectionsModalBootstrap.show();
+      });
+    }
+    if (els.btnCreateCollection) {
+      els.btnCreateCollection.addEventListener('click', async () => {
+        const nome = (els.newCollectionName && els.newCollectionName.value.trim()) || '';
+        if (!nome) {
+          showToast('Indique um nome.', true);
+          return;
+        }
+        try {
+          const j = await fetchJson(API_BASE + 'collections.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'create', nome }),
+          });
+          if (els.newCollectionName) els.newCollectionName.value = '';
+          showToast('Coleção criada.');
+          refreshCollectionsPanel();
+          const id = j.data && j.data.id != null ? j.data.id : null;
+          if (id) loadCollectionItems(parseInt(String(id), 10));
+        } catch (e) {
+          showToast(e.message || 'Erro', true);
+        }
+      });
+    }
+    if (els.btnQuiz && quizModalBootstrap) {
+      els.btnQuiz.addEventListener('click', () => {
+        startQuizRound();
+        quizModalBootstrap.show();
+      });
+    }
+    if (els.btnQuizNext) {
+      els.btnQuizNext.addEventListener('click', () => startQuizRound());
+    }
+    if (els.btnA11y && a11yModalBootstrap) {
+      els.btnA11y.addEventListener('click', () => a11yModalBootstrap.show());
+    }
+    if (els.btnFontSmaller) els.btnFontSmaller.addEventListener('click', () => setFontScale(-0.05));
+    if (els.btnFontLarger) els.btnFontLarger.addEventListener('click', () => setFontScale(0.05));
+    if (els.btnFontReset) els.btnFontReset.addEventListener('click', () => {
+      try {
+        localStorage.removeItem(LS_FONT_SCALE);
+      } catch (e) {}
+      document.documentElement.style.setProperty('--pk-font-scale', '1');
+      showToast('Texto no tamanho padrão.');
+    });
+    if (els.btnToggleHc) els.btnToggleHc.addEventListener('click', () => toggleHighContrast());
+    if (els.btnApplyFilters) {
+      els.btnApplyFilters.addEventListener('click', () => loadListPage(1));
+    }
+    if (els.btnResetFilters) {
+      els.btnResetFilters.addEventListener('click', () => {
+        if (els.filterIdMin) els.filterIdMin.value = '';
+        if (els.filterIdMax) els.filterIdMax.value = '';
+        loadListPage(1);
       });
     }
     if (els.typeFilter) {
