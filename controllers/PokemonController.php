@@ -26,10 +26,16 @@ class PokemonController
         $page = isset($_GET['page']) ? (int) $_GET['page'] : 1;
         $limit = isset($_GET['limit']) ? (int) $_GET['limit'] : 20;
         $region = isset($_GET['region']) ? trim((string) $_GET['region']) : '';
+        $type = isset($_GET['type']) ? trim((string) $_GET['type']) : '';
 
         try
         {
-            $data = $this->pokemonModel->findListPage($page, $limit, $region !== '' ? $region : null);
+            $data = $this->pokemonModel->findListPage(
+                $page,
+                $limit,
+                $region !== '' ? $region : null,
+                $type !== '' ? $type : null
+            );
             JsonView::success($data);
         }
         catch (InvalidArgumentException $e)
